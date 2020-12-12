@@ -42,3 +42,15 @@ postgres=# select id, count(*) from hello group by id;
 postgres=# \q
 2020-12-12 13:57:24.747 EST [4445] LOG:  database system is shut down
 ```
+
+## httpping: Time HTTP(s) requests
+
+Executes a sequence of HTTP GET requests to a URL and reports some average statistics about the requests. It also logs the individual requests which are slower than a given threshold. I think I used this to get some average latency numbers, and to check for slow request outliers.
+
+```
+$ go run ./httpping https://www.google.com/
+2020/12/12 14:04:40 pinging https://www.google.com/ ...
+2020/12/12 14:04:40 slow request duration=226.668295ms; start=2020-12-12 14:04:40.379114 -0500 EST m=+0.000624301; end=2020-12-12 14:04:40.605781 -0500 EST m=+0.227292596
+2020/12/12 14:04:45 slow request duration=120.824503ms; start=2020-12-12 14:04:45.434547 -0500 EST m=+5.056064727; end=2020-12-12 14:04:45.555372 -0500 EST m=+5.176889230
+2020/12/12 14:04:55 204 requests in 15.007340924s = 13.59 req/sec rate; slowest=226.668295ms ; total 2857515 body bytes = 14007.4 bytes/req
+```
