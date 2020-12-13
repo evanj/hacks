@@ -13,6 +13,19 @@ Sat Dec 12 13:27:44 EST 2020 (unix_date)
   LOCAL: 2020-12-12T13:27:44-05:00  UTC: 2020-12-12T18:27:44Z  UNIX EPOCH: 1607797664
 ```
 
+## protodecode: decode protocol buffer bytes without a schema
+
+This is useful for debugging raw data that contains a protocol buffer, but you aren't sure which. It can also partially decode corrupt or invalid protocol buffer messages. This makes it useful for debugging! Example:
+
+```$ go run ./protodecode --nested=4 out
+bytes 0-11: field=1 type=0 (varint) uint=9223372036854775808
+bytes 11-25: field=2 type=2 (length-delimited) len=12 str="Héllo 🌎!" hex=48c3a96c6c6f20f09f8c8e21
+bytes 25-39: field=4 type=2 (length-delimited) len=12 nested message
+  bytes 27-33: field=1 type=0 (varint) uint=1607863096
+  bytes 33-39: field=2 type=0 (varint) uint=437553000
+```
+
+
 ## postgrestmp: start a temporary postgres shell
 
 Creates a new Postgres database in a temporary directory, then runs the psql command line utility to connect to it. When psql exits, the database is deleted. Example:
