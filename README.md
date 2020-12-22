@@ -13,6 +13,18 @@ Sat Dec 12 13:27:44 EST 2020 (unix_date)
   LOCAL: 2020-12-12T13:27:44-05:00  UTC: 2020-12-12T18:27:44Z  UNIX EPOCH: 1607797664
 ```
 
+
+## makeflaky: pause a process to make tests flaky
+
+Many tests are flaky because they depend on real time, or other scheduling order between threads. This tool sends SIGSTOP/SIGCONT signals to temporarily pause and resume a process, which causes tests to run much slower, like they do on slow CI servers. Use `--stopPeriod` to adjust the length of the pause. Example:
+
+```
+$ go run makeflaky.go --stopPeriod=20ms 6034
+2020/12/22 16:55:04 slowing down pid=6034; runPeriod=10ms; stopPeriod=20ms (33.3% duty cycle)...
+2020/12/22 16:55:49 sent 1307 signals
+```
+
+
 ## protodecode: decode protocol buffer bytes without a schema
 
 This is useful for debugging raw data that contains a protocol buffer, but you aren't sure which. It can also partially decode corrupt or invalid protocol buffer messages. This makes it useful for debugging! Example:
