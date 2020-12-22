@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"strconv"
 	"syscall"
 	"time"
@@ -21,7 +22,26 @@ func isNoSuchProcess(err error) bool {
 	return false
 }
 
+var errSigint = errors.New("sigint handled")
+
 func runLoop(pid int, runPeriod time.Duration, stopPeriod time.Duration) error {
+	runLoopExiting := make(chan struct{})
+	defer close(runLoopExiting)
+
+	// create a sleep function that waits for sigint or the timeout
+	sigintChan := make(chan os.Signal, 1)
+	signal.Notify(sigintChan, os.Interrupt)
+	defer signal.Stop(sigintChan)
+
+	sleepOrSigint := func(duration time.Duration) error {
+		select {
+		case <-time.After(duration):
+			return nil
+		case <-sigintChan:
+			return errSigint
+		}
+	}
+
 	dutyCycle := (runPeriod.Seconds() / (runPeriod + stopPeriod).Seconds()) * 100.0
 	log.Printf("slowing down pid=%d; runPeriod=%s; stopPeriod=%s (%.1f%% duty cycle)...",
 		pid, runPeriod.String(), stopPeriod.String(), dutyCycle)
@@ -35,7 +55,16 @@ func runLoop(pid int, runPeriod time.Duration, stopPeriod time.Duration) error {
 			}
 			panic(err)
 		}
-		time.Sleep(stopPeriod)
+		// make sure we always call SIGCONT, even if CTRL-C is pressed
+		err = sleepOrSigint(stopPeriod)
+		err2 := unix.Kill(pid, unix.SIGCONT)
+		if err != nil {
+			return err
+		}
+		if err2 != nil {
+			return err2
+		}
+
 		err = unix.Kill(pid, unix.SIGCONT)
 		if err != nil {
 			if isNoSuchProcess(err) {
@@ -43,7 +72,10 @@ func runLoop(pid int, runPeriod time.Duration, stopPeriod time.Duration) error {
 			}
 			panic(err)
 		}
-		time.Sleep(runPeriod)
+		err = sleepOrSigint(runPeriod)
+		if err != nil {
+			return err
+		}
 
 		iterationCount++
 	}
@@ -67,6 +99,10 @@ func main() {
 	}
 	err = runLoop(pid, *runPeriod, *stopPeriod)
 	if err != nil {
-		panic(err)
+		if err == errSigint {
+			log.Printf("caught SIGINT (CTRL-C)")
+		} else {
+			panic(err)
+		}
 	}
 }
