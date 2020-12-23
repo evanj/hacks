@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"os/signal"
 	"syscall"
 	"time"
 )
@@ -69,6 +70,8 @@ func (p *postgresProcess) Close() error {
 
 	proc := p.proc
 	p.proc = nil
+
+	fmt.Printf("sending postgres SIGINT ...\n")
 	// SIGINT = fast shutdown: terminates all child processes
 	err := proc.Process.Signal(syscall.SIGINT)
 	if err != nil {
@@ -101,8 +104,24 @@ func main() {
 	psql := exec.Command("psql", "postgres")
 	psql.Stdin = os.Stdin
 	psql.Stdout = os.Stdout
-	err = psql.Run()
-	if err != nil {
-		panic(err)
+
+	// register a sigint handler
+	sigintChan := make(chan os.Signal, 1)
+	signal.Notify(sigintChan, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(sigintChan)
+
+	runResult := make(chan error, 1)
+	go func() {
+		runResult <- psql.Run()
+	}()
+	select {
+	case err := <-runResult:
+		if err != nil {
+			panic(err)
+		}
+
+	case sig := <-sigintChan:
+		fmt.Printf("postgrestmp handling signal=%s\n", sig.String())
+		return
 	}
 }
