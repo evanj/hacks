@@ -55,6 +55,9 @@ func makeParseFormat(layout string) timeParseFunc {
 	}
 }
 
+// time layout for the date/time displayed on Datadog dashboards
+const datadogLayout = "Jan 2, 2006, 3:04 pm"
+
 var formats = []timeFormat{
 	{"epoch_ns", parseEpochNanos},
 	{"epoch_s", parseEpochSeconds},
@@ -62,6 +65,9 @@ var formats = []timeFormat{
 	{"rfc3339_no_tz", parseRFC3339AsUTC},
 	{"rfc1123", makeParseFormat(time.RFC1123)},
 	{"unix_date", makeParseFormat(time.UnixDate)},
+	// TODO: datadog times may omit years, in which case they should use the "current" year
+	// TODO: datadog times could be resolved as "local" or "utc" but default to local
+	{"datadog", makeParseFormat(datadogLayout)},
 }
 
 func tryParse(input string) (string, time.Time, error) {

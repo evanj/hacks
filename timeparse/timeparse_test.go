@@ -25,23 +25,27 @@ func TestTryParse(t *testing.T) {
 			time.Date(2020, 6, 10, 20, 1, 31, 0, time.UTC)},
 		{"Sat Dec 12 13:27:44 EST 2020", "unix_date",
 			time.Date(2020, 12, 12, 13, 27, 44, 0, nycTZ)},
+		{"Dec 29, 2020, 5:03 am", "datadog",
+			time.Date(2020, 12, 29, 5, 3, 0, 0, time.UTC)},
 	}
 
-	for i, testCase := range testCases {
-		name, value, err := tryParse(testCase.input)
-		if err != nil {
-			t.Errorf("%d: tryParse(%#v) returned unexpected error %s", i, testCase.input, err.Error())
-			continue
-		}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			name, value, err := tryParse(testCase.input)
+			if err != nil {
+				t.Errorf("tryParse(%#v) returned unexpected error %s", testCase.input, err.Error())
+				return
+			}
 
-		if name != testCase.name {
-			t.Errorf("%d: tryParse(%#v) returned name=%s; expected %s",
-				i, testCase.input, name, testCase.name)
-		}
-		value = value.UTC()
-		if !value.Equal(testCase.value) {
-			t.Errorf("%d: tryParse(%#v) returned value=%s; expected %s",
-				i, testCase.input, value, testCase.value)
-		}
+			if name != testCase.name {
+				t.Errorf("tryParse(%#v) returned name=%s; expected %s",
+					testCase.input, name, testCase.name)
+			}
+			value = value.UTC()
+			if !value.Equal(testCase.value) {
+				t.Errorf("tryParse(%#v) returned value=%s; expected %s",
+					testCase.input, value, testCase.value)
+			}
+		})
 	}
 }
