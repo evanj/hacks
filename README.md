@@ -79,3 +79,7 @@ $ go run ./httpping https://www.google.com/
 2020/12/12 14:04:45 slow request duration=120.824503ms; start=2020-12-12 14:04:45.434547 -0500 EST m=+5.056064727; end=2020-12-12 14:04:45.555372 -0500 EST m=+5.176889230
 2020/12/12 14:04:55 204 requests in 15.007340924s = 13.59 req/sec rate; slowest=226.668295ms ; total 2857515 body bytes = 14007.4 bytes/req
 ```
+
+## unimportedpkgs: Lists packages that are not imported
+
+## lastimport: Finds the git commit that removed the last import
