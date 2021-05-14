@@ -3,6 +3,8 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"io"
@@ -15,7 +17,7 @@ import (
 	"strings"
 )
 
-const version = "3.14.0"
+const version = "3.17.0"
 const protocURLTemplate = "https://github.com/protocolbuffers/protobuf/releases/download/v%s/protoc-%s-%s-x86_64.zip"
 const protocZipPath = "bin/protoc"
 const includeZipPath = "include/"
@@ -23,6 +25,12 @@ const includeZipPath = "include/"
 var goosToProtocOS = map[string]string{
 	"darwin": "osx",
 	"linux":  "linux",
+}
+
+// computed with sha256
+var protocHashes = map[string]string{
+	"darwin": "f51e7d285e9e8fcfe04ac6834d9dab56571e39dbcb01d0437b0eb3ee8a5a76c9",
+	"linux":  "aad5cfd2daf9d49f5ec9b14c4e7e7af0392324706c0e5bb3e44ad5e70a7add5e",
 }
 
 func shouldExtract(name string) bool {
@@ -54,23 +62,64 @@ func extractFromZip(outputDir string, f *zip.File) error {
 	return err
 }
 
-func main() {
-	outputDir := flag.String("outputDir", "", "Path were to write bin/protoc and include/*")
-	flag.Parse()
+func computeProtocHashes() error {
+	for goos := range goosToProtocOS {
+		log.Printf("computing hash for OS=%s ...", goos)
+		protocZipBytes, err := downloadProtocForGOOS(goos)
+		if err != nil {
+			return err
+		}
+		hash := sha256.Sum256(protocZipBytes)
+		hashHex := hex.EncodeToString(hash[:])
+		log.Printf("### OS=%s hash=%s", goos, hashHex)
+	}
+	return nil
+}
 
-	protocURL := fmt.Sprintf(protocURLTemplate, version, version, goosToProtocOS[runtime.GOOS])
+func downloadProtocForGOOS(goos string) ([]byte, error) {
+	protocURL := fmt.Sprintf(protocURLTemplate, version, version, goosToProtocOS[goos])
 	log.Printf("downloading protoc from %s ...", protocURL)
 	resp, err := http.Get(protocURL)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	protocZipBytes, err := ioutil.ReadAll(resp.Body)
 	err2 := resp.Body.Close()
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	if err2 != nil {
-		panic(err2)
+		return nil, err2
+	}
+	return protocZipBytes, nil
+}
+
+func main() {
+	outputDir := flag.String("outputDir", "", "Path were to write bin/protoc and include/*")
+	computeHashes := flag.Bool("computeHashes", false, "Downloads and print hashes for all OSes")
+	flag.Parse()
+
+	if *computeHashes {
+		err := computeProtocHashes()
+		if err != nil {
+			panic(err)
+		}
+		os.Exit(0)
+	}
+
+	expectedHash, err := hex.DecodeString(protocHashes[runtime.GOOS])
+	if err != nil {
+		panic(err)
+	}
+	protocZipBytes, err := downloadProtocForGOOS(runtime.GOOS)
+	if err != nil {
+		panic(err)
+	}
+	hash := sha256.Sum256(protocZipBytes)
+	if !bytes.Equal(expectedHash, hash[:]) {
+		fmt.Fprintf(os.Stderr, "Error: expected protoc hash=%s; downloaded hash=%s\n",
+			protocHashes[runtime.GOOS], hex.EncodeToString(hash[:]))
+		os.Exit(1)
 	}
 
 	zipReader, err := zip.NewReader(bytes.NewReader(protocZipBytes), int64(len(protocZipBytes)))
