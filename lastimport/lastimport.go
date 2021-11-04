@@ -28,7 +28,9 @@ func checkGitGrep(importPath string) error {
 }
 
 func mostRecentImport(importPath string) (string, error) {
-	proc := exec.Command("git", "log", "-p")
+	// list patches from go source files only
+	// this avoids super long lines that can break scanner
+	proc := exec.Command("git", "log", "-p", "--", "*.go")
 	proc.Stderr = os.Stderr
 	stdout, err := proc.StdoutPipe()
 	if err != nil {
