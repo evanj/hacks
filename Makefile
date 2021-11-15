@@ -21,7 +21,7 @@ $(PROTOC): buildtools/getprotoc.go | $(BUILD_DIR)
 	go run $< --outputDir=$(BUILD_DIR)
 
 $(PROTOC_GEN_GO): | $(BUILD_DIR)
-	go build --mod=readonly -o $@ github.com/golang/protobuf/protoc-gen-go
+	go build -o $@ github.com/golang/protobuf/protoc-gen-go
 
 $(BUILD_DIR):
 	mkdir -p $@
