@@ -1,18 +1,41 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 )
 
+// Debian/Ubuntu don't put postgres binaries on PATH. Find them with pg_config.
+func joinPGBinPath(commandName string) (string, error) {
+	configPath, err := exec.LookPath("pg_config")
+	if err == nil {
+		// found the pg_config process: use it to find the bin dir
+		pgConfigProcess := exec.Command(configPath, "--bindir")
+		out, err := pgConfigProcess.Output()
+		if err != nil {
+			return "", err
+		}
+		return filepath.Join(string(bytes.TrimSpace(out)), commandName), nil
+	}
+	return commandName, nil
+}
+
 func initializePostgresDir(dbDir string) error {
-	cmd := exec.Command("initdb", "-D", dbDir)
+	// Debian/Ubuntu: initdb is not in PATH; find it with pg_config
+	initDBPath, err := joinPGBinPath("initdb")
+	if err != nil {
+		return err
+	}
+
+	cmd := exec.Command(initDBPath, "--no-sync", "--pgdata="+dbDir)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
@@ -23,19 +46,35 @@ type postgresProcess struct {
 	dbDir string
 }
 
-const pgSocketName = "/tmp/.s.PGSQL.5432"
+const pgSocketFileName = ".s.PGSQL.5432"
+
+func (p *postgresProcess) socketPath() string {
+	return filepath.Join(p.dbDir, pgSocketFileName)
+}
+
+func (p *postgresProcess) connectionString() string {
+	// https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
+	return "postgresql:///postgres?host=" + p.dbDir
+}
 
 func startPostgres(dbDir string) (*postgresProcess, error) {
 	// By default Postgres puts its Unix-domain socket in /tmp; "-k ." puts it in the data dir.
-	// however, then we get "socket name too long" because the absolute path to the socket
-	// can't exceed 100 characters
-	proc := exec.Command("postgres", "-D", dbDir)
-	proc.Stdout = os.Stdout
-	proc.Stderr = os.Stderr
-	err := proc.Start()
+	// however, then on Mac OS X we get "socket name too long" because the absolute path to the
+	// socket can't exceed 100 characters
+	postgresPath, err := joinPGBinPath("postgres")
 	if err != nil {
 		return nil, err
 	}
+	// -h "" means "do not listen for TCP"
+	proc := exec.Command(postgresPath, "-D", dbDir, "-h", "", "-k", ".")
+	proc.Stdout = os.Stdout
+	proc.Stderr = os.Stderr
+	err = proc.Start()
+	if err != nil {
+		return nil, err
+	}
+
+	process := &postgresProcess{proc, dbDir}
 
 	// poll for the socket to be created
 	const maxPolls = 40
@@ -45,7 +84,7 @@ func startPostgres(dbDir string) (*postgresProcess, error) {
 	for i := 0; i < maxPolls; i++ {
 		time.Sleep(pollSleep)
 
-		_, err = os.Stat(pgSocketName)
+		_, err = os.Stat(process.socketPath())
 		if err == nil {
 			started = true
 			break
@@ -57,7 +96,7 @@ func startPostgres(dbDir string) (*postgresProcess, error) {
 	if !started {
 		time.Sleep(time.Hour)
 		proc.Process.Kill()
-		return nil, errors.New("failed to find Postgres UNIX domain socket " + pgSocketName)
+		return nil, errors.New("failed to find Postgres UNIX domain socket " + process.socketPath())
 	}
 
 	return &postgresProcess{proc, dbDir}, nil
@@ -100,8 +139,8 @@ func main() {
 	}
 	defer proc.Close()
 
-	fmt.Printf("starting psql ...\n")
-	psql := exec.Command("psql", "postgres")
+	fmt.Printf("starting psql connection=%s ...\n", proc.connectionString())
+	psql := exec.Command("psql", proc.connectionString())
 	psql.Stdin = os.Stdin
 	psql.Stdout = os.Stdout
 
@@ -110,14 +149,14 @@ func main() {
 	signal.Notify(sigintChan, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(sigintChan)
 
-	runResult := make(chan error, 1)
+	psqlResult := make(chan error, 1)
 	go func() {
-		runResult <- psql.Run()
+		psqlResult <- psql.Run()
 	}()
 	select {
-	case err := <-runResult:
+	case err := <-psqlResult:
 		if err != nil {
-			panic(err)
+			panic(fmt.Sprintf("psql exited=%s", err.Error()))
 		}
 
 	case sig := <-sigintChan:
