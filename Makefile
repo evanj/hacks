@@ -20,7 +20,8 @@ protodecode/protodemo/demo.pb.go: protodecode/protodemo/demo.proto $(PROTOC) $(P
 $(PROTOC): buildtools/getprotoc.go | $(BUILD_DIR)
 	go run $< --outputDir=$(BUILD_DIR)
 
-$(PROTOC_GEN_GO): | $(BUILD_DIR)
+# I think the version of protoc-gen-go is specified by the version of protobuf in go.mod
+$(PROTOC_GEN_GO): go.mod | $(BUILD_DIR)
 	go build -o $@ github.com/golang/protobuf/protoc-gen-go
 
 $(BUILD_DIR):
