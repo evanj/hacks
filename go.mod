@@ -3,8 +3,8 @@ module github.com/evanj/hacks
 go 1.17
 
 require (
-	github.com/richardartoul/molecule v0.0.0-20200501172711-2c305a9a2ddc
-	golang.org/x/sys v0.0.0-20211103235746-7861aae1554b
+	github.com/richardartoul/molecule v0.0.0-20211116140944-2725ff2715ae
+	golang.org/x/sys v0.0.0-20211124211545-fe61309f8881
 	google.golang.org/protobuf v1.27.1
 )
 
