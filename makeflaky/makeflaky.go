@@ -118,7 +118,7 @@ func main() {
 	runPeriod := flag.Duration("runPeriod", 10*time.Millisecond, "time to let process run")
 	stopPeriod := flag.Duration("stopPeriod", time.Millisecond, "time to stop process with SIGSTOP")
 	goTest := flag.Bool("goTest", false, "pass all other args to go test")
-	goTestHelper := flag.Bool("goTestHelper", false, "pass all other args to go test")
+	goTestHelper := flag.Bool("goTestHelper", false, "INTERNAL ONLY: used with go test -exec")
 	flag.Parse()
 	if *goTest || *goTestHelper {
 		if flag.NArg() == 0 {
@@ -164,7 +164,7 @@ func main() {
 			panic(err)
 		}
 		pidToPause = child.Process.Pid
-		fmt.Fprintf(os.Stderr, "helper started process pid=%d %s %#v ...\n", pidToPause, child.Path, child.Args)
+		log.Printf("helper started process pid=%d %s %#v ...\n", pidToPause, child.Path, child.Args)
 
 		// replace ctx with a context that in cancelled when the child process exits
 		var cancel func()
