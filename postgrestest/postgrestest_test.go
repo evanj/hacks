@@ -1,28 +1,25 @@
 package postgrestest
 
 import (
-	"database/sql"
+	"context"
 	"os"
 	"testing"
 
-	"github.com/lib/pq"
+	"github.com/jackc/pgx/v4"
 )
 
 func TestNew(t *testing.T) {
 	postgresURL := New(t)
-	connector, err := pq.NewConnector(postgresURL)
+	ctx := context.Background()
+	db, err := pgx.Connect(ctx, postgresURL)
 	if err != nil {
 		t.Fatal(err)
 	}
-	db := sql.OpenDB(connector)
+	err = db.Ping(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = db.Ping()
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = db.Close()
+	err = db.Close(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}

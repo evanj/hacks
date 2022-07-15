@@ -30,8 +30,6 @@ func readCPUFlags() ([]string, error) {
 	return nil, nil
 }
 
-
-
 func main() {
 	flags, err := readCPUFlags()
 	if err != nil {
