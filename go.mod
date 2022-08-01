@@ -5,8 +5,8 @@ go 1.18
 require (
 	github.com/jackc/pgx/v4 v4.16.1
 	github.com/richardartoul/molecule v1.0.0
-	golang.org/x/sys v0.0.0-20220712014510-0a85c31ab51e
-	google.golang.org/protobuf v1.28.0
+	golang.org/x/sys v0.0.0-20220731174439-a90be440212d
+	google.golang.org/protobuf v1.28.1
 )
 
 require (
