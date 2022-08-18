@@ -16,8 +16,9 @@ type packageInfo struct {
 	imports    []string
 }
 
-func getPackageInfo() ([]packageInfo, error) {
+func getPackageInfo(dirPath string) ([]packageInfo, error) {
 	proc := exec.Command("go", "list", "-f", "{{.ImportPath}} {{.Name}}{{range .Imports}} {{.}}{{end}}", "./...")
+	proc.Dir = dirPath
 	proc.Stderr = os.Stderr
 	stdout, err := proc.StdoutPipe()
 	if err != nil {
@@ -71,9 +72,9 @@ func sortedStrings(m map[string]struct{}) []string {
 	return out
 }
 
-func main() {
-	log.Printf("getting imports for all packages in current directory ...")
-	pkgs, err := getPackageInfo()
+func findUnimportedPackages(dirPath string) ([]string, error) {
+	log.Printf("getting imports for all packages in directory=%s ...", dirPath)
+	pkgs, err := getPackageInfo(dirPath)
 	if err != nil {
 		panic(err)
 	}
@@ -106,8 +107,17 @@ func main() {
 		log.Println("  ", pkg)
 	}
 
+	return sortedStrings(unimportedPkgs), nil
+}
+
+func main() {
+	unimportedPkgs, err := findUnimportedPackages(".")
+	if err != nil {
+		panic(err)
+	}
+
 	log.Printf("## %d UNIMPORTED PACKAGES:", len(unimportedPkgs))
-	for _, pkg := range sortedStrings(unimportedPkgs) {
+	for _, pkg := range unimportedPkgs {
 		log.Println("  ", pkg)
 	}
 }
