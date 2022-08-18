@@ -5,7 +5,7 @@ PROTOC_GEN_GO:=$(BUILD_DIR)/protoc-gen-go
 
 all: protodecode/protodemo/demo.pb.go
 	goimports -l -w .
-	go test -race ./...
+	go test -race -shuffle=on -count=2 ./...
 	go vet ./...
 	golint ./...
 	# ignore protocol buffers for staticcheck
@@ -14,15 +14,15 @@ all: protodecode/protodemo/demo.pb.go
 	find . -type f | grep '\.proto$$' | xargs clang-format -Werror -i '-style={ColumnLimit: 100}'
 
 protodecode/protodemo/demo.pb.go: protodecode/protodemo/demo.proto $(PROTOC) $(PROTOC_GEN_GO)
-	$(PROTOC) --plugin=$(PROTOC_GEN_GO) --go_out=plugins=grpc,paths=source_relative:. $<
+	$(PROTOC) --plugin=$(PROTOC_GEN_GO) --go_out=paths=source_relative:. $<
 
 # download protoc to a temporary tools directory
 $(PROTOC): buildtools/getprotoc.go | $(BUILD_DIR)
 	go run $< --outputDir=$(BUILD_DIR)
 
-# I think the version of protoc-gen-go is specified by the version of protobuf in go.mod
+# go install uses the version of protoc-gen-go specified by go.mod ... I think
 $(PROTOC_GEN_GO): go.mod | $(BUILD_DIR)
-	go build -o $@ github.com/golang/protobuf/protoc-gen-go
+	GOBIN=$(realpath $(BUILD_DIR)) go install google.golang.org/protobuf/cmd/protoc-gen-go
 
 $(BUILD_DIR):
 	mkdir -p $@
