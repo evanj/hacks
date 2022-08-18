@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -23,7 +22,7 @@ func getDiscard(pingURL string) (int64, error) {
 	if resp.StatusCode != http.StatusOK {
 		return 0, errors.New("wrong HTTP status: " + resp.Status)
 	}
-	n, err := io.Copy(ioutil.Discard, resp.Body)
+	n, err := io.Copy(io.Discard, resp.Body)
 	if err != nil {
 		return 0, err
 	}

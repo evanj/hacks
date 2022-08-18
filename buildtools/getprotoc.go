@@ -8,7 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -83,7 +82,7 @@ func downloadProtocForGOOS(goos string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	protocZipBytes, err := ioutil.ReadAll(resp.Body)
+	protocZipBytes, err := io.ReadAll(resp.Body)
 	err2 := resp.Body.Close()
 	if err != nil {
 		return nil, err

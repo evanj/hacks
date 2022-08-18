@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"strconv"
 	"strings"
@@ -30,7 +29,7 @@ func main() {
 		panic(err)
 	}
 
-	protoBytes, err := ioutil.ReadFile(inputPath)
+	protoBytes, err := os.ReadFile(inputPath)
 	if err != nil {
 		panic(err)
 	}
