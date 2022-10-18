@@ -17,6 +17,11 @@ import (
 	"time"
 )
 
+type Options struct {
+	// If true, Postgres will listen on localhost for network connections.
+	ListenOnLocalhost bool
+}
+
 // New creates a new Postgres instance and returns a connection string URL in the
 // form "postgresql:..." to connect to using sql.Open(). After the test completes, the Postgres
 // instance will be shut down. New will call t.Fatal if an error happens initializing Postgres.
@@ -42,10 +47,16 @@ type Instance struct {
 	dbDir string
 }
 
-// NewInstance creates a new Postgres instance in a temporary directory. The caller must call
-// Close() on it to ensure it is stopped and the temporary space is deleted. Most callers should
-// use NewPostgresForTest(t) instead.
+// NewInstance calls NewInstanceWithOptions() with the default options. Most callers should use
+// NewPostgresForTest() instead.
 func NewInstance() (*Instance, error) {
+	return NewInstanceWithOptions(Options{})
+}
+
+// NewInstanceWithOptions creates a new Postgres instance in a temporary directory. The caller must
+// call Close() to ensure it is stopped and the temporary space is deleted. Most callers should
+// use NewPostgresForTest() instead.
+func NewInstanceWithOptions(options Options) (*Instance, error) {
 	shouldCleanUpDir := true
 	dir, err := os.MkdirTemp("", "postgrestest_")
 	if err != nil {
@@ -72,7 +83,13 @@ func NewInstance() (*Instance, error) {
 	}
 	// -h "" means "do not listen for TCP"
 	// TODO: Add tuning parameters? E.g. -c shared_buffers='1G'?
-	proc := exec.Command(postgresPath, "-D", dir, "-h", "", "-k", ".")
+	// proc := exec.Command(postgresPath, "-D", dir, "-k", ".")
+	args := []string{"-D", dir, "-k", "."}
+	if !options.ListenOnLocalhost {
+		// default for Postgres: listen on localhost; default for this module: only unix sockets
+		args = append(args, "-h", "")
+	}
+	proc := exec.Command(postgresPath, args...)
 	// TODO: capture output somewhere else?
 	proc.Stdout = os.Stdout
 	proc.Stderr = os.Stderr

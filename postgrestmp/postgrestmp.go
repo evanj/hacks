@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -11,7 +12,10 @@ import (
 )
 
 func main() {
-	instance, err := postgrestest.NewInstance()
+	listenOnLocalhost := flag.Bool("listenOnLocalhost", false, "Listens on localhost if set")
+	flag.Parse()
+
+	instance, err := postgrestest.NewInstanceWithOptions(postgrestest.Options{ListenOnLocalhost: *listenOnLocalhost})
 	if err != nil {
 		panic(err)
 	}
