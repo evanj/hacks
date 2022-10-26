@@ -17,6 +17,7 @@ import (
 	"time"
 )
 
+// Options configures the Postgres instance.
 type Options struct {
 	// If true, Postgres will listen on localhost for network connections.
 	ListenOnLocalhost bool
