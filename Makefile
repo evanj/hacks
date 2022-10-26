@@ -9,7 +9,7 @@ all: protodecode/protodemo/demo.pb.go
 	go vet ./...
 	golint ./...
 	# ignore protocol buffers for staticcheck
-	go list ./... | grep -v '/protodemo' | xargs staticcheck
+	go list ./... | grep -v '/protodemo$$' | xargs staticcheck --checks=all
 	go mod tidy
 	find . -type f | grep '\.proto$$' | xargs clang-format -Werror -i '-style={ColumnLimit: 100}'
 

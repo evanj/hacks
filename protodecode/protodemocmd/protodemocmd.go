@@ -4,8 +4,8 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"math"
+	"os"
 
 	"github.com/evanj/hacks/protodecode/protodemo"
 	"google.golang.org/protobuf/proto"
@@ -28,7 +28,7 @@ func main() {
 
 	if *outPath != "" {
 		fmt.Printf("writing to %s ...\n", *outPath)
-		err = ioutil.WriteFile(*outPath, out, 0600)
+		err = os.WriteFile(*outPath, out, 0600)
 		if err != nil {
 			panic(err)
 		}
