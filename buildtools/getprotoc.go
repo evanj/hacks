@@ -16,7 +16,7 @@ import (
 	"strings"
 )
 
-const version = "21.7"
+const version = "21.9"
 const protocURLTemplate = "https://github.com/protocolbuffers/protobuf/releases/download/v%s/protoc-%s-%s-x86_64.zip"
 const protocZipPath = "bin/protoc"
 const includeZipPath = "include/"
@@ -28,8 +28,8 @@ var goosToProtocOS = map[string]string{
 
 // computed with sha256
 var protocHashes = map[string]string{
-	"darwin": "cd3609fa1efc73db9c58fc63e40b240558eb2a8080b4fbfbe1c4b93bbedecc20",
-	"linux":  "0a260c6df439bcf1ecdd5e38e7a7648e4edf99c1a22a4cc66ce8e62c53bdb837",
+	"darwin": "a6419520a063242b0dedd433cbfc617424da2e8357ef96bf694d6ba3bca51887",
+	"linux":  "3cd951aff8ce713b94cde55e12378f505f2b89d47bf080508cf77e3934f680b6",
 }
 
 func shouldExtract(name string) bool {
