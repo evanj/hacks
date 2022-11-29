@@ -95,21 +95,78 @@ func runLoop(ctx context.Context, pid int, runPeriod time.Duration, stopPeriod t
 	return nil
 }
 
-// exitWithSameErr calls os.Exit with the same code as err
-func exitWithSameErr(err error) {
+// exitCode returns the exit code from err, or panics if it is not *exec.ExitError.
+func exitCode(err error) int {
 	if err == nil {
-		os.Exit(0)
+		return 0
 	}
 
 	var exitErr *exec.ExitError
 	if errors.As(err, &exitErr) {
-		os.Exit(exitErr.ExitCode())
+		return exitErr.ExitCode()
 	}
 
 	panic(fmt.Sprintf("bug: err=%#v is not of type ExitError", err))
 }
 
-const usageMessage = `Usage: makeflaky (pid) || makeflaky (args) -goTest (go test args)
+// exitWithSameErr calls os.Exit with the same code as err
+func exitWithSameErr(err error) {
+	os.Exit(exitCode(err))
+}
+
+func maybeExecAndRun(execFlag bool, runPeriod time.Duration, stopPeriod time.Duration, args []string) error {
+	var pidToPause int
+	var child *exec.Cmd
+	waitErrChan := make(chan error, 1)
+
+	ctx := context.Background()
+	if execFlag {
+		child = exec.Command(args[0], args[1:]...)
+		child.Stdin = os.Stdin
+		child.Stdout = os.Stdout
+		child.Stderr = os.Stderr
+		err := child.Start()
+		if err != nil {
+			return err
+		}
+		pidToPause = child.Process.Pid
+		log.Printf("helper started process pid=%d cmd line: %s %#v ...\n",
+			pidToPause, child.Path, child.Args)
+
+		// replace ctx with a context that is cancelled when the child process exits
+		var cancel func()
+		ctx, cancel = context.WithCancel(ctx)
+		go func() {
+			// ignore the error: it will be checked by the parent
+			waitErr := child.Wait()
+			cancel()
+			waitErrChan <- waitErr
+		}()
+	} else {
+		var err error
+		pidToPause, err = strconv.Atoi(args[0])
+		if err != nil {
+			return err
+		}
+	}
+
+	err := runLoop(ctx, pidToPause, runPeriod, stopPeriod)
+	if err != nil {
+		if err == errSigint {
+			log.Printf("caught SIGINT (CTRL-C)")
+		} else {
+			panic(fmt.Sprintf("BUG: unexpected err=%#v", err))
+		}
+	}
+
+	if child != nil {
+		// get the result from wait and exit with the same code
+		return <-waitErrChan
+	}
+	return nil
+}
+
+const usageMessage = `Usage: makeflaky [args] (pid) || makeflaky [args] -exec (program args) || makeflaky [args] -goTest (go test args)
 
 Pauses a process periodically to try and cause tests that depend on real time to fail.
 `
@@ -118,9 +175,14 @@ func main() {
 	runPeriod := flag.Duration("runPeriod", 10*time.Millisecond, "time to let process run")
 	stopPeriod := flag.Duration("stopPeriod", time.Millisecond, "time to stop process with SIGSTOP")
 	goTest := flag.Bool("goTest", false, "pass all other args to go test")
-	goTestHelper := flag.Bool("goTestHelper", false, "INTERNAL ONLY: used with go test -exec")
+	execFlag := flag.Bool("exec", false, "run the program with all other args")
 	flag.Parse()
-	if *goTest || *goTestHelper {
+	if *goTest || *execFlag {
+		if *goTest && *execFlag {
+			fmt.Fprintln(os.Stderr, "ERROR: Cannot specify both -goTest and -exec")
+			os.Exit(1)
+		}
+
 		if flag.NArg() == 0 {
 			fmt.Fprint(os.Stderr, usageMessage)
 			os.Exit(1)
@@ -136,7 +198,7 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		helperArgs := fmt.Sprintf("%s -goTestHelper -runPeriod=%s -stopPeriod=%s",
+		helperArgs := fmt.Sprintf("%s -runPeriod=%s -stopPeriod=%s -exec",
 			exePath, runPeriod.String(), stopPeriod.String())
 		args := []string{"test", "-exec", helperArgs}
 		args = append(args, flag.Args()...)
@@ -149,59 +211,6 @@ func main() {
 		exitWithSameErr(err)
 	}
 
-	var pidToPause int
-	var child *exec.Cmd
-	waitErrChan := make(chan error)
-
-	ctx := context.Background()
-	if *goTestHelper {
-		child = exec.Command(flag.Args()[0], flag.Args()[1:]...)
-		child.Stdin = os.Stdin
-		child.Stdout = os.Stdout
-		child.Stderr = os.Stderr
-		err := child.Start()
-		if err != nil {
-			panic(err)
-		}
-		pidToPause = child.Process.Pid
-		log.Printf("helper started process pid=%d %s %#v ...\n", pidToPause, child.Path, child.Args)
-
-		// replace ctx with a context that in cancelled when the child process exits
-		var cancel func()
-		ctx, cancel = context.WithCancel(ctx)
-		go func() {
-			// ignore the error: it will be checked by the parent
-			waitErr := child.Wait()
-			cancel()
-			waitErrChan <- waitErr
-		}()
-	} else {
-		var err error
-		pidToPause, err = strconv.Atoi(flag.Arg(0))
-		if err != nil {
-			panic(err)
-		}
-	}
-
-	err := runLoop(ctx, pidToPause, *runPeriod, *stopPeriod)
-	if err != nil {
-		if err == errSigint {
-			log.Printf("caught SIGINT (CTRL-C)")
-		} else {
-			panic(err)
-		}
-	}
-
-	if child != nil {
-		// get the result from wait and exit with the same code
-		err = <-waitErrChan
-		if err != nil {
-			var exitErr *exec.ExitError
-			if errors.As(err, &exitErr) {
-				os.Exit(exitErr.ExitCode())
-			} else {
-				panic(err)
-			}
-		}
-	}
+	err := maybeExecAndRun(*execFlag, *runPeriod, *stopPeriod, flag.Args())
+	exitWithSameErr(err)
 }
