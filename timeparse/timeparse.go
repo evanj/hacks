@@ -15,9 +15,13 @@ var epochZero = time.Unix(0, 0)
 var reasonableStartTime = epochZero.Add(2 * 24 * time.Hour)
 var reasonableEndTime = time.Unix(time32BitLimit, 0)
 
+func formatTime(t time.Time) string {
+	return fmt.Sprintf("  LOCAL: %s  UTC: %s  UNIX EPOCH: %d",
+		t.Local().Format(time.RFC3339Nano), t.UTC().Format(time.RFC3339Nano), t.Unix())
+}
+
 func printTime(t time.Time) {
-	fmt.Printf("  LOCAL: %s  UTC: %s  UNIX EPOCH: %d\n",
-		t.Format(time.RFC3339Nano), t.UTC().Format(time.RFC3339Nano), t.Unix())
+	fmt.Println(formatTime(t))
 }
 
 type timeParseFunc func(t string) (time.Time, error)

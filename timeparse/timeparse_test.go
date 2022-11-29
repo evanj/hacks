@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -47,5 +49,17 @@ func TestTryParse(t *testing.T) {
 					testCase.input, value, testCase.value)
 			}
 		})
+	}
+}
+
+func TestFormat(t *testing.T) {
+	inUTC := time.Date(2020, 12, 29, 5, 3, 0, 0, time.UTC)
+	out := formatTime(inUTC)
+
+	// local time was incorrectly formatted as UTC
+	expectedLocal := fmt.Sprintf("LOCAL: %s  ", inUTC.Local().Format(time.RFC3339))
+	if !strings.Contains(out, expectedLocal) {
+		t.Errorf("in=%s format=%#v; expected to find %#v",
+			inUTC.Format(time.RFC3339Nano), out, expectedLocal)
 	}
 }
