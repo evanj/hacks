@@ -17,22 +17,49 @@ import (
 )
 
 const nodeVersion = "18.12.1"
-const nodeURLTemplate = "https://nodejs.org/dist/v%s/node-v%s-linux-x64.tar.xz"
+const nodeURLTemplate = "https://nodejs.org/dist/v%s/node-v%s-%s-%s.tar.xz"
+
+type platform struct {
+	goos   string
+	goarch string
+}
+
+func (p platform) String() string {
+	return fmt.Sprintf("GOOS=%s GOARCH=%s", p.goos, p.goarch)
+}
+
+func getPlatform() platform {
+	return platform{runtime.GOOS, runtime.GOARCH}
+}
+
+var goarchToNodePlatform = map[string]string{
+	"amd64": "x64",
+	"arm64": "arm64",
+}
 
 // computed with sha256
-var nodeHashes = map[string]string{
-	"linux": "4481a34bf32ddb9a9ff9540338539401320e8c3628af39929b4211ea3552a19e",
+var nodeHashes = map[platform]string{
+	{"linux", "amd64"}:  "4481a34bf32ddb9a9ff9540338539401320e8c3628af39929b4211ea3552a19e",
+	{"darwin", "amd64"}: "6c88d462550a024661e74e9377371d7e023321a652eafb3d14d58a866e6ac002",
+	{"darwin", "arm64"}: "17f2e25d207d36d6b0964845062160d9ed16207c08d09af33b9a2fd046c5896f",
 }
 
 func installTypescript(nodeDir string, logf dltools.LogFunc) error {
 	log.Printf("installing node and typescript in dir=%s ...", nodeDir)
 
-	expectedHash := nodeHashes[runtime.GOOS]
+	hostPlatform := getPlatform()
+
+	expectedHash := nodeHashes[hostPlatform]
 	if expectedHash == "" {
-		return fmt.Errorf("missing expected hash for GOOS=%s", runtime.GOOS)
+		return fmt.Errorf("missing expected hash %s", hostPlatform.String())
 	}
 
-	nodeURL := fmt.Sprintf(nodeURLTemplate, nodeVersion, nodeVersion)
+	nodePlatform := goarchToNodePlatform[hostPlatform.goarch]
+	if nodePlatform == "" {
+		return fmt.Errorf("missing node platform for GOARCH=%s", hostPlatform.goarch)
+	}
+
+	nodeURL := fmt.Sprintf(nodeURLTemplate, nodeVersion, nodeVersion, runtime.GOOS, nodePlatform)
 	log.Printf("downloading url=%s ...", nodeURL)
 	nodePackageBytes, err := dltools.Download(nodeURL, expectedHash)
 	if err != nil {
