@@ -2,8 +2,12 @@
 BUILD_DIR:=build
 PROTOC:=$(BUILD_DIR)/bin/protoc
 PROTOC_GEN_GO:=$(BUILD_DIR)/protoc-gen-go
+NODE_DIR:=$(BUILD_DIR)/node
 
-all: protodecode/protodemo/demo.pb.go
+# always execute all/clean when asked
+.PHONY: all clean
+
+all: protodecode/protodemo/demo.pb.go $(NODE_DIR)
 	goimports -l -w .
 	go test -race -shuffle=on -count=2 ./...
 	go vet ./...
@@ -12,6 +16,15 @@ all: protodecode/protodemo/demo.pb.go
 	go list ./... | grep -v '/protodemo$$' | xargs staticcheck --checks=all
 	go mod tidy
 	find . -type f | grep '\.proto$$' | xargs clang-format -Werror -i '-style={ColumnLimit: 100}'
+
+	GOPATH=$(shell go env GOPATH) govulncheck ./...
+
+	echo "typescript version:"
+	go run ./runtypescript --nodeDir=$@ -- --version
+
+$(NODE_DIR): runtypescript/runtypescript.go | $(BUILD_DIR)
+	$(RM) -r $@
+	go run $< --verbose --nodeDir=$@ -- --version
 
 protodecode/protodemo/demo.pb.go: protodecode/protodemo/demo.proto $(PROTOC) $(PROTOC_GEN_GO)
 	$(PROTOC) --plugin=$(PROTOC_GEN_GO) --go_out=paths=source_relative:. $<
