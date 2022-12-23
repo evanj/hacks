@@ -20,7 +20,7 @@ all: protodecode/protodemo/demo.pb.go $(NODE_DIR)
 	GOPATH=$(shell go env GOPATH) govulncheck ./...
 
 	echo "typescript version:"
-	go run ./runtypescript --nodeDir=$@ -- --version
+	go run ./runtypescript --nodeDir=$(NODE_DIR) -- --version
 
 $(NODE_DIR): runtypescript/runtypescript.go | $(BUILD_DIR)
 	$(RM) -r $@
