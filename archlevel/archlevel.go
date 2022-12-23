@@ -41,9 +41,19 @@ func main() {
 		flagsSet[flag] = struct{}{}
 	}
 
-	// RHEL9 targets x86-64-v2
+	// RHEL9 targets x86-64-v2, which is approximately
+	//
 	// https://developers.redhat.com/blog/2021/01/05/building-red-hat-enterprise-linux-9-for-the-x86-64-v2-microarchitecture-level#background_of_the_x86_64_microarchitecture_levels
 	// https://unix.stackexchange.com/questions/631217/how-do-i-check-if-my-cpu-supports-x86-64-v2
+	//
+	// See:
+	// https://en.wikipedia.org/wiki/X86-64#Microarchitecture_levels
+	//
+	// Official definition section in the x86-64 ABI section 3.1.1 Processor Architecture:
+	// https://gitlab.com/x86-psABIs/x86-64-ABI
+	//
+	// v2 is approximately Intel Nehalem (2008) / AMD Bulldozer (2011)
+	// v3 is approximately Intel Haswell (2013)
 	levels := [][]string{
 		{"lm", "cmov", "cx8", "fpu", "fxsr", "mmx", "syscall", "sse2"},
 		{"cx16", "lahf_lm", "popcnt", "sse4_1", "sse4_2", "ssse3"},
@@ -60,5 +70,5 @@ func main() {
 			}
 		}
 	}
-	fmt.Printf("CPU supports level %d\n", len(levels))
+	fmt.Printf("CPU supports level %d (x86-64-v%d)\n", len(levels), len(levels))
 }
