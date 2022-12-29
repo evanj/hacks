@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/evanj/hacks/dltools"
@@ -17,51 +16,24 @@ import (
 )
 
 const nodeVersion = "18.12.1"
-const nodeURLTemplate = "https://nodejs.org/dist/v%s/node-v%s-%s-%s.tar.xz"
+const nodeURLTemplate = "https://nodejs.org/dist/v{{.Version}}/node-v{{.Version}}-{{.OS}}-{{.Arch}}.tar.xz"
 
-type platform struct {
-	goos   string
-	goarch string
-}
-
-func (p platform) String() string {
-	return fmt.Sprintf("GOOS=%s GOARCH=%s", p.goos, p.goarch)
-}
-
-func getPlatform() platform {
-	return platform{runtime.GOOS, runtime.GOARCH}
-}
-
-var goarchToNodePlatform = map[string]string{
+var goarchToNode = map[string]string{
 	"amd64": "x64",
 	"arm64": "arm64",
 }
 
 // computed with sha256
-var nodeHashes = map[platform]string{
-	{"linux", "amd64"}:  "4481a34bf32ddb9a9ff9540338539401320e8c3628af39929b4211ea3552a19e",
-	{"darwin", "amd64"}: "6c88d462550a024661e74e9377371d7e023321a652eafb3d14d58a866e6ac002",
-	{"darwin", "arm64"}: "17f2e25d207d36d6b0964845062160d9ed16207c08d09af33b9a2fd046c5896f",
+var nodeHashes = map[dltools.Platform]string{
+	{GOOS: "darwin", GOARCH: "amd64"}: "6c88d462550a024661e74e9377371d7e023321a652eafb3d14d58a866e6ac002",
+	{GOOS: "darwin", GOARCH: "arm64"}: "17f2e25d207d36d6b0964845062160d9ed16207c08d09af33b9a2fd046c5896f",
+	{GOOS: "linux", GOARCH: "amd64"}:  "4481a34bf32ddb9a9ff9540338539401320e8c3628af39929b4211ea3552a19e",
 }
 
-func installTypescript(nodeDir string, logf dltools.LogFunc) error {
+func installTypescript(fetcher *dltools.PackageFetcher, nodeDir string, logf dltools.LogFunc) error {
 	log.Printf("installing node and typescript in dir=%s ...", nodeDir)
 
-	hostPlatform := getPlatform()
-
-	expectedHash := nodeHashes[hostPlatform]
-	if expectedHash == "" {
-		return fmt.Errorf("missing expected hash %s", hostPlatform.String())
-	}
-
-	nodePlatform := goarchToNodePlatform[hostPlatform.goarch]
-	if nodePlatform == "" {
-		return fmt.Errorf("missing node platform for GOARCH=%s", hostPlatform.goarch)
-	}
-
-	nodeURL := fmt.Sprintf(nodeURLTemplate, nodeVersion, nodeVersion, runtime.GOOS, nodePlatform)
-	log.Printf("downloading url=%s ...", nodeURL)
-	nodePackageBytes, err := dltools.Download(nodeURL, expectedHash)
+	nodePackageBytes, err := fetcher.DownloadForCurrentPlatform()
 	if err != nil {
 		return err
 	}
@@ -125,14 +97,29 @@ func main() {
 	computeHashes := flag.Bool("computeHashes", false, "Downloads and print hashes for all OSes")
 	verbose := flag.Bool("verbose", false, "Enables verbose logging")
 	flag.Parse()
+
+	fetcher, err := dltools.NewPackageFetcher(nodeURLTemplate, nodeHashes, nodeVersion)
+	if err != nil {
+		panic(err)
+	}
+	err = fetcher.SetArchMap(goarchToNode)
+	if err != nil {
+		panic(err)
+	}
+
+	if *computeHashes {
+		hashes, err := fetcher.ComputeHashes()
+		if err != nil {
+			panic(err)
+		}
+		os.Stdout.WriteString(dltools.FormatHashes(hashes))
+		os.Exit(0)
+	}
+
 	if *nodeDir == "" {
 		fmt.Fprintf(os.Stderr, "Usage: runtypescript --nodeDir=(nodedir)\n\n")
 		fmt.Fprintf(os.Stderr, "  nodeDir: Path to write node directory containing node and typescript\n")
 		os.Exit(1)
-	}
-
-	if *computeHashes {
-		panic("TODO: implement computeHashes")
 	}
 
 	logf := dltools.NilLogFunc
@@ -142,7 +129,7 @@ func main() {
 
 	statResult, err := os.Stat(*nodeDir)
 	if os.IsNotExist(err) {
-		err = installTypescript(*nodeDir, logf)
+		err = installTypescript(fetcher, *nodeDir, logf)
 		if err != nil {
 			panic(err)
 		}

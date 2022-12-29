@@ -30,7 +30,7 @@ protodecode/protodemo/demo.pb.go: protodecode/protodemo/demo.proto $(PROTOC) $(P
 	$(PROTOC) --plugin=$(PROTOC_GEN_GO) --go_out=paths=source_relative:. $<
 
 # download protoc to a temporary tools directory
-$(PROTOC): buildtools/getprotoc.go | $(BUILD_DIR)
+$(PROTOC): getprotoc/getprotoc.go | $(BUILD_DIR)
 	go run $< --outputDir=$(BUILD_DIR)
 
 # go install uses the version of protoc-gen-go specified by go.mod ... I think
