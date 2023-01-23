@@ -95,7 +95,7 @@ func runLoop(ctx context.Context, pid int, runPeriod time.Duration, stopPeriod t
 	return nil
 }
 
-// exitCode returns the exit code from err, or panics if it is not *exec.ExitError.
+// exitCode returns the exit code from err, 1 if it is not *exec.ExitError, or 0 if nil.
 func exitCode(err error) int {
 	if err == nil {
 		return 0
@@ -106,11 +106,16 @@ func exitCode(err error) int {
 		return exitErr.ExitCode()
 	}
 
-	panic(fmt.Sprintf("bug: err=%#v is not of type ExitError", err))
+	// not exec.ExitError: assume code 1
+	return 1
 }
 
-// exitWithSameErr calls os.Exit with the same code as err
+// exitWithSameErr calls os.Exit with the same code as err if err is nil or exec.ExitCode. If it
+// is another error type, it calls panic(err).
 func exitWithSameErr(err error) {
+	if err != nil && !errors.Is(err, &exec.ExitError{}) {
+		panic(err)
+	}
 	os.Exit(exitCode(err))
 }
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"log"
 	"os"
@@ -25,7 +26,7 @@ func TestMain(m *testing.M) {
 	os.Exit(*exitCode)
 }
 
-func TestExec(t *testing.T) {
+func TestExecAndExitCode(t *testing.T) {
 	testExePath, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
@@ -47,5 +48,19 @@ func TestExec(t *testing.T) {
 	elapsed := end.Sub(start)
 	if elapsed < childSleep {
 		t.Errorf("elapsed=%s < childSleep=%s", elapsed, childSleep)
+	}
+}
+
+func TestExitCodeNotExitErr(t *testing.T) {
+	// an error that is not exec.ExitError returns code 1
+	notExitErr := errors.New("test error")
+	code := exitCode(notExitErr)
+	const expected = 1
+	if code != expected {
+		t.Errorf("exitCode(%#v)=%d; expected %d", notExitErr, code, expected)
+	}
+
+	if exitCode(nil) != 0 {
+		t.Errorf("exitCode(0)=%d; expected 0", exitCode(nil))
 	}
 }
