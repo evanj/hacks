@@ -1,4 +1,5 @@
 // Package bitset implements a dense bit set with a similar API as roaring bitmaps.
+// This is written as an experiment. Use Roaring Bitmaps or bits-and-blooms instead.
 package bitset
 
 import (
@@ -9,25 +10,23 @@ import (
 bitSet is a fixed-size set of bits, encoded as an array of uint64. It has a similar interface
 as Roaring Bitmaps. In my quick-and-dirty benchmark, bitSet is faster, but may use more
 memory, since it uses an uncompressed representation. My quick and dirty benchmark suggests that
-when around 25% of the bits are set, you should just use the dense representation.
+when around 25% of the bits are set, you should just use the dense representation. The
+bits-and-blooms implementation is a bit faster than this one, so you should use that instead.
 
 See: https://pkg.go.dev/github.com/RoaringBitmap/roaring
+See:
 
-Benchmark results with Go 1.19 on an Mac M1 Max, showing that this is always faster but uses more
-memory.
+Benchmark results with Go 1.19 on an Mac M1 Max, showing that this is faster but uses more memory.
 
-	BenchmarkBitSet/bitset_set_and_iterate_p01
-	BenchmarkBitSet/bitset_set_and_iterate_p01-10         	   11187	    105534 ns/op	  131112 B/op	       3 allocs/op
-	BenchmarkBitSet/roaring_set_and_iterate_p01
-	BenchmarkBitSet/roaring_set_and_iterate_p01-10        	    2131	    572778 ns/op	   33576 B/op	      26 allocs/op
-	BenchmarkBitSet/bitset_set_and_iterate_p10
-	BenchmarkBitSet/bitset_set_and_iterate_p10-10         	    1308	    911855 ns/op	  131112 B/op	       3 allocs/op
-	BenchmarkBitSet/roaring_set_and_iterate_p10
-	BenchmarkBitSet/roaring_set_and_iterate_p10-10        	     433	   2758711 ns/op	   66808 B/op	      43 allocs/op
-	BenchmarkBitSet/bitset_set_and_iterate_p25
-	BenchmarkBitSet/bitset_set_and_iterate_p25-10         	     534	   2249230 ns/op	  131112 B/op	       3 allocs/op
-	BenchmarkBitSet/roaring_set_and_iterate_p25
-	BenchmarkBitSet/roaring_set_and_iterate_p25-10        	     158	   7536782 ns/op	  133272 B/op	      76 allocs/op
+	BenchmarkBitSet/bitset_set_and_iterate_p01-10         	   11330	    105355 ns/op	  131112 B/op	       3 allocs/op
+	BenchmarkBitSet/bitsandblooms_set_and_iterate_p01-10  	   14216	     84549 ns/op	  131104 B/op	       2 allocs/op
+	BenchmarkBitSet/roaring_set_and_iterate_p01-10        	    2143	    560578 ns/op	   33576 B/op	      26 allocs/op
+	BenchmarkBitSet/bitset_set_and_iterate_p10-10         	    1317	    899670 ns/op	  131112 B/op	       3 allocs/op
+	BenchmarkBitSet/bitsandblooms_set_and_iterate_p10-10  	    1662	    722709 ns/op	  131104 B/op	       2 allocs/op
+	BenchmarkBitSet/roaring_set_and_iterate_p10-10        	     435	   2746712 ns/op	   66808 B/op	      43 allocs/op
+	BenchmarkBitSet/bitset_set_and_iterate_p25-10         	     537	   2222508 ns/op	  131112 B/op	       3 allocs/op
+	BenchmarkBitSet/bitsandblooms_set_and_iterate_p25-10  	     669	   1781710 ns/op	  131104 B/op	       2 allocs/op
+	BenchmarkBitSet/roaring_set_and_iterate_p25-10        	     159	   7484694 ns/op	  133272 B/op	      76 allocs/op
 */
 type bitSet struct {
 	bits []uint64

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/RoaringBitmap/roaring/roaring64"
+	bitsandblooms "github.com/bits-and-blooms/bitset"
 )
 
 func TestBitSet(t *testing.T) {
@@ -87,11 +88,23 @@ func BenchmarkBitSet(b *testing.B) {
 				}
 
 				it := set.iterator()
-				count := 0
 				for it.hasNext() {
 					v := it.next()
 					doNotOptimizeTotal += v
-					count++
+				}
+			}
+		})
+
+		b.Run(fmt.Sprintf("bitsandblooms_set_and_iterate_p%02d", percentToSet), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				set := bitsandblooms.New(bitSetSize)
+				for j := 0; j < numToSet; j++ {
+					index := rng.Intn(numToSet)
+					set.Set(uint(index))
+				}
+
+				for index, isValid := set.NextSet(0); isValid; index, isValid = set.NextSet(index + 1) {
+					doNotOptimizeTotal += int(index)
 				}
 			}
 		})
@@ -105,11 +118,9 @@ func BenchmarkBitSet(b *testing.B) {
 				}
 
 				it := set.Iterator()
-				count := 0
 				for it.HasNext() {
 					v := it.Next()
 					doNotOptimizeTotal += int(v)
-					count++
 				}
 			}
 		})
