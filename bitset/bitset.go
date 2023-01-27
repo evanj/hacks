@@ -38,19 +38,18 @@ This also shows that bits-and-blooms appears to be faster.
 Results on an Intel 11th Gen Core i5-1135G7 (TigerLake) shows that this is competitive with
 bits-and-blooms.
 
-	cpu: 11th Gen Intel(R) Core(TM) i5-1135G7 @ 2.40GHz
-	BenchmarkBitSet/bitset_set_and_iterate_no_it_p01-8        148285 ns/op    131072 B/op         1 allocs/op
-	BenchmarkBitSet/bitset_set_and_iterate_p01-8              144220 ns/op    131112 B/op         3 allocs/op
-	BenchmarkBitSet/bitsandblooms_set_and_iterate_p01-8       137650 ns/op    131104 B/op         2 allocs/op
-	BenchmarkBitSet/roaring_set_and_iterate_p01-8             568225 ns/op     33576 B/op        26 allocs/op
-	BenchmarkBitSet/bitset_set_and_iterate_no_it_p10-8        943776 ns/op    131072 B/op         1 allocs/op
-	BenchmarkBitSet/bitset_set_and_iterate_p10-8              958302 ns/op    131112 B/op         3 allocs/op
-	BenchmarkBitSet/bitsandblooms_set_and_iterate_p10-8       966873 ns/op    131104 B/op         2 allocs/op
-	BenchmarkBitSet/roaring_set_and_iterate_p10-8            3391472 ns/op     66808 B/op        43 allocs/op
-	BenchmarkBitSet/bitset_set_and_iterate_no_it_p25-8       2386860 ns/op    131072 B/op         1 allocs/op
-	BenchmarkBitSet/bitset_set_and_iterate_p25-8             2476936 ns/op    131112 B/op         3 allocs/op
-	BenchmarkBitSet/bitsandblooms_set_and_iterate_p25-8      2440958 ns/op    131104 B/op         2 allocs/op
-	BenchmarkBitSet/roaring_set_and_iterate_p25-8            8397258 ns/op    133272 B/op        76 allocs/op
+	BenchmarkBitSet/bitset_set_and_iterate_no_it_p01-8        186328 ns/op    131072 B/op        1 allocs/op
+	BenchmarkBitSet/bitset_set_and_iterate_p01-8              189845 ns/op    131072 B/op        1 allocs/op
+	BenchmarkBitSet/bitsandblooms_set_and_iterate_p01-8       150519 ns/op    131104 B/op        2 allocs/op
+	BenchmarkBitSet/roaring_set_and_iterate_p01-8             556439 ns/op     33576 B/op       26 allocs/op
+	BenchmarkBitSet/bitset_set_and_iterate_no_it_p10-8        842341 ns/op    131072 B/op        1 allocs/op
+	BenchmarkBitSet/bitset_set_and_iterate_p10-8              849049 ns/op    131072 B/op        1 allocs/op
+	BenchmarkBitSet/bitsandblooms_set_and_iterate_p10-8       912134 ns/op    131104 B/op        2 allocs/op
+	BenchmarkBitSet/roaring_set_and_iterate_p10-8            3094966 ns/op     66808 B/op       43 allocs/op
+	BenchmarkBitSet/bitset_set_and_iterate_no_it_p25-8       2080622 ns/op    131072 B/op        1 allocs/op
+	BenchmarkBitSet/bitset_set_and_iterate_p25-8             2096033 ns/op    131072 B/op        1 allocs/op
+	BenchmarkBitSet/bitsandblooms_set_and_iterate_p25-8      2266388 ns/op    131104 B/op        2 allocs/op
+	BenchmarkBitSet/roaring_set_and_iterate_p25-8            8376975 ns/op    133272 B/op       76 allocs/op
 */
 type bitSet struct {
 	bits []uint64

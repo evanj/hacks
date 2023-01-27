@@ -74,10 +74,26 @@ func BenchmarkBitSet(b *testing.B) {
 
 	const bitSetSize = 1000000
 
-	// do something to make sure a very clever compiler can't optimize the benchmark away
+	// ensure a clever compiler can't optimize the benchmark away
 	doNotOptimizeTotal := 0
 	for _, percentToSet := range []int{1, 10, 25} {
 		numToSet := bitSetSize * percentToSet / 100
+
+		b.Run(fmt.Sprintf("bitset_set_and_iterate_no_it_alt_p%02d", percentToSet), func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				set := newBitSet(bitSetSize)
+				for j := 0; j < numToSet; j++ {
+					index := rng.Intn(numToSet)
+					set.add(index)
+				}
+
+				lastBits := set.lenBits()
+				for index := set.nextSet(0); index < lastBits; index = set.nextSet(index + 1) {
+					doNotOptimizeTotal += int(index)
+				}
+			}
+		})
 
 		b.Run(fmt.Sprintf("bitset_set_and_iterate_no_it_p%02d", percentToSet), func(b *testing.B) {
 			b.ReportAllocs()
@@ -144,6 +160,49 @@ func BenchmarkBitSet(b *testing.B) {
 			}
 		})
 	}
+
+	b.Logf("IGNORE: doNotOptimizeTotal=%d", doNotOptimizeTotal)
+}
+
+func byteIndexDiv(bitIndex int) int {
+	return bitIndex / 64
+}
+
+func byteIndexShift(bitIndex int) int {
+	return bitIndex >> 6
+}
+
+func TestByteIndex(t *testing.T) {
+	for index := 0; index < 100; index++ {
+		b1 := byteIndexDiv(index)
+		b2 := byteIndexShift(index)
+		if b1 != b2 {
+			t.Errorf("b1=%d b2=%d", b1, b2)
+		}
+	}
+}
+
+func BenchmarkByteIndex(b *testing.B) {
+	const bitIndexes = 1000000
+
+	// ensure a clever compiler can't optimize the benchmark away
+	doNotOptimizeTotal := 0
+
+	b.Run("div", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			for index := 0; index < bitIndexes; index++ {
+				doNotOptimizeTotal += byteIndexDiv(index)
+			}
+		}
+	})
+
+	b.Run("shift", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			for index := 0; index < bitIndexes; index++ {
+				doNotOptimizeTotal += byteIndexShift(index)
+			}
+		}
+	})
 
 	b.Logf("IGNORE: doNotOptimizeTotal=%d", doNotOptimizeTotal)
 }
