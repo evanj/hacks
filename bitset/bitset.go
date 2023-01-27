@@ -69,9 +69,12 @@ func newBitSet(size int) *bitSet {
 func bitSetIndexes(index int) (uintIndex int, bitIndex int) {
 	const bitSetBitMask = bitSetBitSize - 1
 
-	// index / bitSetBitSize should generate the same code
-	// however on ARM64, it does not, and it seems to matter on the M1 Max.
+	// index / bitSetBitSize should generate the same code and index >> bitSetBitSizeLog2
+	// However, I think I ran into a code generation issue on ARM64/M1 Max, but I can't reproduce
+	// it. Use the shift version since it should be better. I think I may have been hitting a
+	// code alignment issue.
 	uintIndex = index >> bitSetBitSizeLog2
+	// uintIndex = index / bitSetBitSize
 	bitIndex = index & bitSetBitMask
 	return uintIndex, bitIndex
 }

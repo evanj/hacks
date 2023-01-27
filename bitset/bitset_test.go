@@ -79,22 +79,6 @@ func BenchmarkBitSet(b *testing.B) {
 	for _, percentToSet := range []int{1, 10, 25} {
 		numToSet := bitSetSize * percentToSet / 100
 
-		b.Run(fmt.Sprintf("bitset_set_and_iterate_no_it_alt_p%02d", percentToSet), func(b *testing.B) {
-			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
-				set := newBitSet(bitSetSize)
-				for j := 0; j < numToSet; j++ {
-					index := rng.Intn(numToSet)
-					set.add(index)
-				}
-
-				lastBits := set.lenBits()
-				for index := set.nextSet(0); index < lastBits; index = set.nextSet(index + 1) {
-					doNotOptimizeTotal += int(index)
-				}
-			}
-		})
-
 		b.Run(fmt.Sprintf("bitset_set_and_iterate_no_it_p%02d", percentToSet), func(b *testing.B) {
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
@@ -164,34 +148,52 @@ func BenchmarkBitSet(b *testing.B) {
 	b.Logf("IGNORE: doNotOptimizeTotal=%d", doNotOptimizeTotal)
 }
 
-func byteIndexDiv(bitIndex int) int {
-	return bitIndex / 64
+const uintBits = 64
+const uintMask = uintBits - 1
+const uintBitsLog2 = 6
+
+func uintIndexesDiv(index int) (int, int) {
+	uintIndex := index / uintBits
+	bitIndex := index & uintMask
+	return uintIndex, bitIndex
 }
 
-func byteIndexShift(bitIndex int) int {
-	return bitIndex >> 6
+func uintIndexesShift(index int) (int, int) {
+	uintIndex := index >> uintBitsLog2
+	bitIndex := index & uintMask
+	return uintIndex, bitIndex
 }
 
-func TestByteIndex(t *testing.T) {
+func TestUintIndexes(t *testing.T) {
 	for index := 0; index < 100; index++ {
-		b1 := byteIndexDiv(index)
-		b2 := byteIndexShift(index)
-		if b1 != b2 {
-			t.Errorf("b1=%d b2=%d", b1, b2)
+		uint1, bit1 := uintIndexesDiv(index)
+		uint2, bit2 := uintIndexesShift(index)
+		if !(uint1 == uint2 && bit1 == bit2) {
+			t.Errorf("uint1=%d bit1=%d  !=  uint2=%d bit2=%d", uint1, bit1, uint2, bit2)
 		}
 	}
 }
 
-func BenchmarkByteIndex(b *testing.B) {
+// BenchmarkUintIndexes is an attempt to reproduce a code generation bug that I *think* I ran into,
+// where / and >> produced different code. However now I can't reproduce it, so I think I was
+// probably screwing something else up.
+func BenchmarkUintIndexes(b *testing.B) {
 	const bitIndexes = 1000000
 
 	// ensure a clever compiler can't optimize the benchmark away
 	doNotOptimizeTotal := 0
 
+	uints := make([]uint64, 1000000/uintBits)
+	for i := range uints {
+		uints[i] = uint64(i)
+	}
+
 	b.Run("div", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			for index := 0; index < bitIndexes; index++ {
-				doNotOptimizeTotal += byteIndexDiv(index)
+				u, b := uintIndexesDiv(index)
+				bit := int(uints[u] & (1 << b))
+				doNotOptimizeTotal += bit
 			}
 		}
 	})
@@ -199,7 +201,9 @@ func BenchmarkByteIndex(b *testing.B) {
 	b.Run("shift", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			for index := 0; index < bitIndexes; index++ {
-				doNotOptimizeTotal += byteIndexShift(index)
+				u, b := uintIndexesShift(index)
+				bit := int(uints[u] & (1 << b))
+				doNotOptimizeTotal += bit
 			}
 		}
 	})
