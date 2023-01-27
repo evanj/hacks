@@ -1,5 +1,6 @@
 // Package bitset implements a dense bit set with a similar API as roaring bitmaps.
-// This is written as an experiment. Use Roaring Bitmaps or bits-and-blooms instead.
+// This is written as an experiment and is incomplete. Use bits-and-blooms instead,
+// or Roaring Bitmaps if you want compressed sparsed bit sets.
 package bitset
 
 import (
@@ -8,15 +9,15 @@ import (
 
 /*
 bitSet is a fixed-size set of bits, encoded as an array of uint64. It has a similar interface
-as Roaring Bitmaps. In my quick-and-dirty benchmark, bitSet is faster, but may use more
-memory, since it uses an uncompressed representation. My quick and dirty benchmark suggests that
-when around 25% of the bits are set, you should just use the dense representation. The
-bits-and-blooms implementation is a bit faster than this one, so you should use that instead.
+as Roaring Bitmaps. In my quick-and-dirty benchmark, bitSet is faster, but uses more
+memory unless >= ~25% of the bits are set. The bits-and-blooms implementation is more complete,
+but has similar performance to this implementation.
 
 See: https://pkg.go.dev/github.com/RoaringBitmap/roaring
 See:
 
-Benchmark results with Go 1.19 on an Mac M1 Max, showing that this is faster but uses more memory.
+Benchmark results with Go 1.19 on an Mac M1 Max, showing that dense is faster but uses more memory.
+This also shows that bits-and-blooms appears to be faster.
 
 	BenchmarkBitSet/bitset_set_and_iterate_p01-10         	   11330	    105355 ns/op	  131112 B/op	       3 allocs/op
 	BenchmarkBitSet/bitsandblooms_set_and_iterate_p01-10  	   14216	     84549 ns/op	  131104 B/op	       2 allocs/op
@@ -27,6 +28,23 @@ Benchmark results with Go 1.19 on an Mac M1 Max, showing that this is faster but
 	BenchmarkBitSet/bitset_set_and_iterate_p25-10         	     537	   2222508 ns/op	  131112 B/op	       3 allocs/op
 	BenchmarkBitSet/bitsandblooms_set_and_iterate_p25-10  	     669	   1781710 ns/op	  131104 B/op	       2 allocs/op
 	BenchmarkBitSet/roaring_set_and_iterate_p25-10        	     159	   7484694 ns/op	  133272 B/op	      76 allocs/op
+
+Results on an Intel 11th Gen Core i5-1135G7 (TigerLake) shows that this is competitive with
+bits-and-blooms.
+
+	cpu: 11th Gen Intel(R) Core(TM) i5-1135G7 @ 2.40GHz
+	BenchmarkBitSet/bitset_set_and_iterate_no_it_p01-8         	   23568	    148285 ns/op	  131072 B/op	       1 allocs/op
+	BenchmarkBitSet/bitset_set_and_iterate_p01-8               	   25155	    144220 ns/op	  131112 B/op	       3 allocs/op
+	BenchmarkBitSet/bitsandblooms_set_and_iterate_p01-8        	   28768	    137650 ns/op	  131104 B/op	       2 allocs/op
+	BenchmarkBitSet/roaring_set_and_iterate_p01-8              	    6109	    568225 ns/op	   33576 B/op	      26 allocs/op
+	BenchmarkBitSet/bitset_set_and_iterate_no_it_p10-8         	    3720	    943776 ns/op	  131072 B/op	       1 allocs/op
+	BenchmarkBitSet/bitset_set_and_iterate_p10-8               	    3747	    958302 ns/op	  131112 B/op	       3 allocs/op
+	BenchmarkBitSet/bitsandblooms_set_and_iterate_p10-8        	    3870	    966873 ns/op	  131104 B/op	       2 allocs/op
+	BenchmarkBitSet/roaring_set_and_iterate_p10-8              	    1138	   3391472 ns/op	   66808 B/op	      43 allocs/op
+	BenchmarkBitSet/bitset_set_and_iterate_no_it_p25-8         	    1540	   2386860 ns/op	  131072 B/op	       1 allocs/op
+	BenchmarkBitSet/bitset_set_and_iterate_p25-8               	    1428	   2476936 ns/op	  131112 B/op	       3 allocs/op
+	BenchmarkBitSet/bitsandblooms_set_and_iterate_p25-8        	    1530	   2440958 ns/op	  131104 B/op	       2 allocs/op
+	BenchmarkBitSet/roaring_set_and_iterate_p25-8              	     427	   8397258 ns/op	  133272 B/op	      76 allocs/op
 */
 type bitSet struct {
 	bits []uint64

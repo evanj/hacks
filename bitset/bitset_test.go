@@ -79,7 +79,24 @@ func BenchmarkBitSet(b *testing.B) {
 	for _, percentToSet := range []int{1, 10, 25} {
 		numToSet := bitSetSize * percentToSet / 100
 
+		b.Run(fmt.Sprintf("bitset_set_and_iterate_no_it_p%02d", percentToSet), func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				set := newBitSet(bitSetSize)
+				for j := 0; j < numToSet; j++ {
+					index := rng.Intn(numToSet)
+					set.add(index)
+				}
+
+				lastBits := set.lenBits()
+				for index := set.nextSet(0); index < lastBits; index = set.nextSet(index + 1) {
+					doNotOptimizeTotal += int(index)
+				}
+			}
+		})
+
 		b.Run(fmt.Sprintf("bitset_set_and_iterate_p%02d", percentToSet), func(b *testing.B) {
+			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
 				set := newBitSet(bitSetSize)
 				for j := 0; j < numToSet; j++ {
@@ -96,6 +113,7 @@ func BenchmarkBitSet(b *testing.B) {
 		})
 
 		b.Run(fmt.Sprintf("bitsandblooms_set_and_iterate_p%02d", percentToSet), func(b *testing.B) {
+			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
 				set := bitsandblooms.New(bitSetSize)
 				for j := 0; j < numToSet; j++ {
@@ -110,6 +128,7 @@ func BenchmarkBitSet(b *testing.B) {
 		})
 
 		b.Run(fmt.Sprintf("roaring_set_and_iterate_p%02d", percentToSet), func(b *testing.B) {
+			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
 				set := roaring64.New()
 				for j := 0; j < numToSet; j++ {
@@ -174,6 +193,9 @@ func FuzzBitSet(f *testing.F) {
 		if !reflect.DeepEqual(setIndexes, mapIndexes) {
 			t.Errorf("setIndexes=%#v", setIndexes)
 			t.Errorf("mapIndexes=%#v", mapIndexes)
+		}
+		if set.numSet() != len(setIndexes) {
+			t.Errorf("numSet()=%d; len(setIndexes)=%d", set.numSet(), len(setIndexes))
 		}
 	})
 }

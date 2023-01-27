@@ -4,6 +4,7 @@ go 1.19
 
 require (
 	github.com/RoaringBitmap/roaring v1.2.3
+	github.com/bits-and-blooms/bitset v1.5.0
 	github.com/jackc/pgx/v5 v5.0.3
 	github.com/richardartoul/molecule v1.0.0
 	github.com/ulikunitz/xz v0.5.11
@@ -12,7 +13,6 @@ require (
 )
 
 require (
-	github.com/bits-and-blooms/bitset v1.5.0 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/go-cmp v0.5.8 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
