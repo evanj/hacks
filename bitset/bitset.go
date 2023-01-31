@@ -1,8 +1,6 @@
 // Package bitset implements a dense bit set with a similar API as roaring bitmaps.
 // This is written as an experiment and is incomplete. Use bits-and-blooms instead,
 // or Roaring Bitmaps if you want compressed sparsed bit sets.
-//
-
 package bitset
 
 import (

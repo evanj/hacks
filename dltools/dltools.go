@@ -19,10 +19,16 @@ import (
 	"text/template"
 )
 
+// AMD64 is the amd64 GOARCH value
 const AMD64 = "amd64"
+
+// ARM64 is the arm64 GOARCH value
 const ARM64 = "arm64"
 
+// DARWIN is the darwin GOOS value
 const DARWIN = "darwin"
+
+// LINUX is the linux GOOS value
 const LINUX = "linux"
 
 var knownGoarches = []string{AMD64, ARM64}
@@ -88,6 +94,7 @@ func NilLogFunc(message string, args ...interface{}) {}
 
 // ExtractTar extracts a tar file from r into destinationDir.
 func ExtractTar(r io.Reader, destinationDir string, logf LogFunc) error {
+	// TODO: https://github.com/golang/go/issues/57850
 	tarReader := tar.NewReader(r)
 	for {
 		header, err := tarReader.Next()
@@ -205,6 +212,7 @@ func (p *PackageFetcher) renderURL(platform Platform) (string, error) {
 	return buf.String(), nil
 }
 
+// ComputeHashes downloads the packages and computes their hashes for all Platforms.
 func (p *PackageFetcher) ComputeHashes() (map[Platform]string, error) {
 	out := map[Platform]string{}
 	for platform := range p.hashes {
@@ -224,6 +232,7 @@ func (p *PackageFetcher) ComputeHashes() (map[Platform]string, error) {
 	return out, nil
 }
 
+// FormatHashes returns a string value of hashes to be copy/pasted into code.
 func FormatHashes(hashes map[Platform]string) string {
 	builder := &strings.Builder{}
 
@@ -283,6 +292,7 @@ func NewPackageFetcher(urlTemplate string, hashes map[Platform]string, version s
 	return &PackageFetcher{parsedTemplate, hashes, version, nil, nil}, nil
 }
 
+// DownloadForCurrentPlatform downloads the package for the current platform.
 func (p *PackageFetcher) DownloadForCurrentPlatform() ([]byte, error) {
 	platform := GetPlatform()
 	url, err := p.renderURL(platform)
@@ -300,6 +310,7 @@ func sliceToSet(slice []string) map[string]bool {
 	return out
 }
 
+// SetOSMap configures the GOOS map for this PackageFetcher.
 func (p *PackageFetcher) SetOSMap(osMap map[string]string) error {
 	knownOSSet := sliceToSet(knownGooses)
 	for goos := range osMap {
@@ -311,6 +322,7 @@ func (p *PackageFetcher) SetOSMap(osMap map[string]string) error {
 	return nil
 }
 
+// SetArchMap configures the GOARCH map for this PackageFetcher.
 func (p *PackageFetcher) SetArchMap(archMap map[string]string) error {
 	knownArchSet := sliceToSet(knownGoarches)
 	for goarch := range archMap {
