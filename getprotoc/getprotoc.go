@@ -48,6 +48,15 @@ func extractFromZip(outputDir string, f *zip.File) error {
 	if err != nil {
 		return err
 	}
+
+	// check that file is writable: remove if not to avoid permission denied
+	stat, err := os.Stat(outputPath)
+	if err == nil && (stat.Mode().Perm()&0200) == 0 {
+		// file exists but is not writable: attempt to remove
+		// explicitly ignore error: OpenFile will error if this fails
+		os.Remove(outputPath)
+	}
+
 	outputFile, err := os.OpenFile(outputPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, f.Mode())
 	if err != nil {
 		return err
