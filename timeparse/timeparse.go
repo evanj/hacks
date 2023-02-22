@@ -11,8 +11,8 @@ import (
 // this is 2038-01-19T03:14:07Z
 const time32BitLimit = (1 << 32) - 1
 
-var epochZero = time.Unix(0, 0)
-var reasonableStartTime = epochZero.Add(2 * 24 * time.Hour)
+// reasonable time range is used to guess at the time format: we guess times in this range
+var reasonableStartTime = time.Date(1990, time.January, 1, 2, 3, 4, 0, time.UTC)
 var reasonableEndTime = time.Unix(time32BitLimit, 0)
 
 func formatTime(t time.Time) string {
@@ -37,6 +37,22 @@ func parseEpochSeconds(t string) (time.Time, error) {
 		return time.Time{}, err
 	}
 	return time.Unix(intVal, 0), nil
+}
+
+func parseEpochMillis(t string) (time.Time, error) {
+	intVal, err := strconv.ParseInt(t, 10, 64)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return time.Unix(0, intVal*1000*1000), nil
+}
+
+func parseEpochMicros(t string) (time.Time, error) {
+	intVal, err := strconv.ParseInt(t, 10, 64)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return time.Unix(0, intVal*1000), nil
 }
 
 func parseEpochNanos(t string) (time.Time, error) {
@@ -64,6 +80,8 @@ const datadogLayout = "Jan 2, 2006, 3:04 pm"
 
 var formats = []timeFormat{
 	{"epoch_ns", parseEpochNanos},
+	{"epoch_ms", parseEpochMillis},
+	{"epoch_us", parseEpochMicros},
 	{"epoch_s", parseEpochSeconds},
 	{"rfc3339", makeParseFormat(time.RFC3339Nano)},
 	{"rfc3339_no_tz", parseRFC3339AsUTC},

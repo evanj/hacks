@@ -29,6 +29,7 @@ func TestTryParse(t *testing.T) {
 			time.Date(2020, 12, 12, 13, 27, 44, 0, nycTZ)},
 		{"Dec 29, 2020, 5:03 am", "datadog",
 			time.Date(2020, 12, 29, 5, 3, 0, 0, time.UTC)},
+		{"1677070777000", "epoch_ms", time.Date(2023, 2, 22, 12, 59, 37, 0, time.UTC)},
 	}
 
 	for _, testCase := range testCases {
