@@ -57,6 +57,7 @@ func installTypescript(fetcher *dltools.PackageFetcher, nodeDir string, logf dlt
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	logf("running %s ...", strings.Join(cmd.Args, " "))
 	return cmd.Run()
 }
 
@@ -70,8 +71,11 @@ func getEnvToNode(nodeDir string, logf dltools.LogFunc) []string {
 
 	env := os.Environ()
 	for i, envVar := range env {
-		if strings.HasPrefix(envVar, "PATH=") {
-			env[i] = envVar + string(filepath.ListSeparator) + nodeBinDir
+		const pathEnvVarPrefix = "PATH="
+		if strings.HasPrefix(envVar, pathEnvVarPrefix) {
+			// our node bin dir must go first: npm uses "/usr/bin/env node"
+			pathValue := envVar[len(pathEnvVarPrefix):]
+			env[i] = pathEnvVarPrefix + nodeBinDir + string(filepath.ListSeparator) + pathValue
 			logf("setting PATH: %s", env[i])
 		}
 	}
@@ -80,10 +84,10 @@ func getEnvToNode(nodeDir string, logf dltools.LogFunc) []string {
 }
 
 func execTypescript(nodeDir string, logf dltools.LogFunc, extraArgs []string) error {
-	logf("calling Exec ...")
 	env := getEnvToNode(nodeDir, logf)
 	args := []string{getNodeExePath(nodeDir, "tsc")}
 	args = append(args, extraArgs...)
+	logf("calling Exec: %s", strings.Join(args, " "))
 	return unix.Exec(args[0], args, env)
 }
 
