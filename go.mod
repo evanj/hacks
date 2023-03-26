@@ -8,8 +8,8 @@ require (
 	github.com/jackc/pgx/v5 v5.3.0
 	github.com/richardartoul/molecule v1.0.0
 	github.com/ulikunitz/xz v0.5.11
-	golang.org/x/sys v0.5.0
-	google.golang.org/protobuf v1.28.1
+	golang.org/x/sys v0.6.0
+	google.golang.org/protobuf v1.30.0
 )
 
 require (
