@@ -4,11 +4,11 @@ go 1.19
 
 require (
 	github.com/RoaringBitmap/roaring v1.2.3
-	github.com/bits-and-blooms/bitset v1.5.0
-	github.com/jackc/pgx/v5 v5.3.0
+	github.com/bits-and-blooms/bitset v1.7.0
+	github.com/jackc/pgx/v5 v5.3.1
 	github.com/richardartoul/molecule v1.0.0
 	github.com/ulikunitz/xz v0.5.11
-	golang.org/x/sys v0.6.0
+	golang.org/x/sys v0.7.0
 	google.golang.org/protobuf v1.30.0
 )
 
