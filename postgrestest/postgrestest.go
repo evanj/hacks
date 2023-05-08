@@ -1,5 +1,5 @@
-// Package postgrestest allows creating a temporary Postgres instance for the duration of a Go test
-// or package.
+// Package postgrestest creates a temporary Postgres instance. Tests should call New(). Other
+// code should call NewInstance() or NewInstanceWithOptions().
 package postgrestest
 
 import (
@@ -48,15 +48,14 @@ type Instance struct {
 	dbDir string
 }
 
-// NewInstance calls NewInstanceWithOptions() with the default options. Most callers should use
-// NewPostgresForTest() instead.
+// NewInstance calls NewInstanceWithOptions() with the default options. Tests should prefer New().
 func NewInstance() (*Instance, error) {
 	return NewInstanceWithOptions(Options{})
 }
 
 // NewInstanceWithOptions creates a new Postgres instance in a temporary directory. The caller must
-// call Close() to ensure it is stopped and the temporary space is deleted. Most callers should
-// use NewPostgresForTest() instead.
+// call Close() to ensure it is stopped and the temporary space is deleted. Tests should prefer to
+// call New().
 func NewInstanceWithOptions(options Options) (*Instance, error) {
 	shouldCleanUpDir := true
 	dir, err := os.MkdirTemp("", "postgrestest_")
