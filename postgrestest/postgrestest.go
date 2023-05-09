@@ -12,15 +12,23 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/evanj/hacks/nilslog"
+	"golang.org/x/exp/slog"
 )
+
+const pgSocketFileName = ".s.PGSQL.5432"
 
 // Options configures the Postgres instance.
 type Options struct {
 	// If true, Postgres will listen on localhost for network connections.
 	ListenOnLocalhost bool
+	// If not nil, verbose information will be logged.
+	Logger *slog.Logger
 }
 
 // New creates a new Postgres instance and returns a connection string URL in the
@@ -45,6 +53,7 @@ func New(t *testing.T) string {
 // Instance contains the state of a new temporary Postgres instance.
 type Instance struct {
 	proc  *exec.Cmd
+	cfg   *pgConfig
 	dbDir string
 }
 
@@ -57,6 +66,8 @@ func NewInstance() (*Instance, error) {
 // call Close() to ensure it is stopped and the temporary space is deleted. Tests should prefer to
 // call New().
 func NewInstanceWithOptions(options Options) (*Instance, error) {
+	options.Logger = nilslog.NewIfNil(options.Logger)
+
 	shouldCleanUpDir := true
 	dir, err := os.MkdirTemp("", "postgrestest_")
 	if err != nil {
@@ -68,8 +79,12 @@ func NewInstanceWithOptions(options Options) (*Instance, error) {
 		}
 	}()
 
-	// TODO: refactor initializePostgresDir to avoid calling joinPGBinPath TWICE
-	err = initializePostgresDir(dir)
+	cfg, err := readPGConfig(options.Logger)
+	if err != nil {
+		return nil, err
+	}
+
+	err = initializePostgresDir(dir, options.Logger, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -77,10 +92,8 @@ func NewInstanceWithOptions(options Options) (*Instance, error) {
 	// By default Postgres puts its Unix-domain socket in /tmp; "-k ." puts it in the data dir.
 	// however, then on Mac OS X we get "socket name too long" because the absolute path to the
 	// socket can't exceed 100 characters
-	postgresPath, err := joinPGBinPath("postgres")
-	if err != nil {
-		return nil, err
-	}
+	postgresPath := cfg.binPath("postgres")
+
 	// -h "" means "do not listen for TCP"
 	// TODO: Add tuning parameters? E.g. -c shared_buffers='1G'?
 	// proc := exec.Command(postgresPath, "-D", dir, "-k", ".")
@@ -93,6 +106,7 @@ func NewInstanceWithOptions(options Options) (*Instance, error) {
 	// TODO: capture output somewhere else?
 	proc.Stdout = os.Stdout
 	proc.Stderr = os.Stderr
+	logCMD(options.Logger, proc)
 	err = proc.Start()
 	if err != nil {
 		return nil, err
@@ -105,7 +119,7 @@ func NewInstanceWithOptions(options Options) (*Instance, error) {
 		}
 	}()
 
-	instance := &Instance{proc, dir}
+	instance := &Instance{proc, cfg, dir}
 
 	// poll for the socket to be created
 	const maxPolls = 40
@@ -138,35 +152,55 @@ func NewInstanceWithOptions(options Options) (*Instance, error) {
 	return instance, err
 }
 
-// Debian/Ubuntu don't put postgres binaries on PATH. Find them with pg_config.
-func joinPGBinPath(commandName string) (string, error) {
-	configPath, err := exec.LookPath("pg_config")
-	if err == nil {
-		// found the pg_config process: use it to find the bin dir
-		pgConfigProcess := exec.Command(configPath, "--bindir")
-		out, err := pgConfigProcess.Output()
-		if err != nil {
-			return "", err
-		}
-		return filepath.Join(string(bytes.TrimSpace(out)), commandName), nil
-	}
-	return commandName, nil
+// BinPath returns the absolute path to commandName in the Postgres binary directory.
+func (i *Instance) BinPath(commandName string) string {
+	return i.cfg.binPath(commandName)
 }
 
-func initializePostgresDir(dbDir string) error {
-	// Debian/Ubuntu: initdb is not in PATH; find it with pg_config
-	initDBPath, err := joinPGBinPath("initdb")
+func logCMD(logger *slog.Logger, cmd *exec.Cmd) {
+	logger.Info("running process", "cmd_line", strings.Join(cmd.Args, " "))
+}
+
+// Debian/Ubuntu don't put postgres binaries on PATH. Find them with pg_config.
+// They also wrap psql with a Perl script to allow multiple versions to co-exist.
+type pgConfig struct {
+	path string
+}
+
+func readPGConfig(logger *slog.Logger) (*pgConfig, error) {
+	configPath, err := exec.LookPath("pg_config")
 	if err != nil {
-		return err
+		return nil, err
 	}
 
+	// found the pg_config process: use it to find the bin dir
+	pgConfigProcess := exec.Command(configPath, "--bindir")
+	logCMD(logger, pgConfigProcess)
+	out, err := pgConfigProcess.Output()
+	if err != nil {
+		return nil, err
+	}
+	binPath := string(bytes.TrimSpace(out))
+	return &pgConfig{binPath}, nil
+}
+
+func (p *pgConfig) binPath(commandName string) string {
+	return filepath.Join(p.path, commandName)
+}
+
+func initializePostgresDir(dbDir string, logger *slog.Logger, cfg *pgConfig) error {
+	// Debian/Ubuntu: initdb is not in PATH; find it with pg_config
+	initDBPath := cfg.binPath("initdb")
+
+	// --no-sync: return without waiting for fsync
+	// --pgdata: specify cluster database
+	// --username: use postgres as the superuser (I believe this changed)
 	cmd := exec.Command(initDBPath, "--no-sync", "--pgdata="+dbDir)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	logCMD(logger, cmd)
 	return cmd.Run()
 }
-
-const pgSocketFileName = ".s.PGSQL.5432"
 
 func (i *Instance) socketPath() string {
 	return filepath.Join(i.dbDir, pgSocketFileName)
