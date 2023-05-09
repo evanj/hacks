@@ -34,7 +34,7 @@ type Options struct {
 // New creates a new Postgres instance and returns a connection string URL in the
 // form "postgresql:..." to connect to using sql.Open(). After the test completes, the Postgres
 // instance will be shut down. New will call t.Fatal if an error happens initializing Postgres.
-func New(t *testing.T) string {
+func New(t testing.TB) string {
 	instance, err := NewInstance()
 	if err != nil {
 		t.Fatalf("failed starting postgres: %s", err.Error())
