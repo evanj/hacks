@@ -18,10 +18,14 @@ import (
 	"time"
 
 	"github.com/evanj/hacks/nilslog"
+	"golang.org/x/exp/slices"
 	"golang.org/x/exp/slog"
 )
 
 const pgSocketFileName = ".s.PGSQL.5432"
+
+const langEnvVar = "LANG"
+const enUTF8Locale = "en_US.UTF-8"
 
 // Options configures the Postgres instance.
 type Options struct {
@@ -34,6 +38,7 @@ type Options struct {
 // New creates a new Postgres instance and returns a connection string URL in the
 // form "postgresql:..." to connect to using sql.Open(). After the test completes, the Postgres
 // instance will be shut down. New will call t.Fatal if an error happens initializing Postgres.
+// See NewInstanceWithOptions for more details.
 func New(t testing.TB) string {
 	instance, err := NewInstance()
 	if err != nil {
@@ -57,14 +62,31 @@ type Instance struct {
 	dbDir string
 }
 
-// NewInstance calls NewInstanceWithOptions() with the default options. Tests should prefer New().
+// NewInstance calls NewInstanceWithOptions() with the default options. The caller must call Close()
+// to ensure it is stopped and the temporary space is deleted. Tests should prefer to call New().
 func NewInstance() (*Instance, error) {
 	return NewInstanceWithOptions(Options{})
+}
+
+// environWithFixedLang replaces the LANG environment variable with cUTF8Locale
+func environWithFixedLang() []string {
+	environ := os.Environ()
+	for i, variable := range environ {
+		if strings.HasPrefix(variable, langEnvVar+"=") {
+			environ = slices.Delete(environ, i, i+1)
+			break
+		}
+	}
+	environ = append(environ, langEnvVar+"="+enUTF8Locale)
+	return environ
 }
 
 // NewInstanceWithOptions creates a new Postgres instance in a temporary directory. The caller must
 // call Close() to ensure it is stopped and the temporary space is deleted. Tests should prefer to
 // call New().
+//
+// The Postgres instance will use the "en_US.UTF-8" locale to ensure that tests don't depend on the
+// local environment.
 func NewInstanceWithOptions(options Options) (*Instance, error) {
 	options.Logger = nilslog.NewIfNil(options.Logger)
 
@@ -94,19 +116,13 @@ func NewInstanceWithOptions(options Options) (*Instance, error) {
 	// socket can't exceed 100 characters
 	postgresPath := cfg.binPath("postgres")
 
-	// -h "" means "do not listen for TCP"
 	// TODO: Add tuning parameters? E.g. -c shared_buffers='1G'?
-	// proc := exec.Command(postgresPath, "-D", dir, "-k", ".")
 	args := []string{"-D", dir, "-k", "."}
 	if !options.ListenOnLocalhost {
 		// default for Postgres: listen on localhost; default for this module: only unix sockets
 		args = append(args, "-h", "")
 	}
-	proc := exec.Command(postgresPath, args...)
-	// TODO: capture output somewhere else?
-	proc.Stdout = os.Stdout
-	proc.Stderr = os.Stderr
-	logCMD(options.Logger, proc)
+	proc := commandPassOutput(options.Logger, postgresPath, args...)
 	err = proc.Start()
 	if err != nil {
 		return nil, err
@@ -174,8 +190,7 @@ func readPGConfig(logger *slog.Logger) (*pgConfig, error) {
 	}
 
 	// found the pg_config process: use it to find the bin dir
-	pgConfigProcess := exec.Command(configPath, "--bindir")
-	logCMD(logger, pgConfigProcess)
+	pgConfigProcess := command(logger, configPath, "--bindir")
 	out, err := pgConfigProcess.Output()
 	if err != nil {
 		return nil, err
@@ -188,6 +203,22 @@ func (p *pgConfig) binPath(commandName string) string {
 	return filepath.Join(p.path, commandName)
 }
 
+// command calls exec.Command and sets Env, and logs the command.
+func command(logger *slog.Logger, name string, arg ...string) *exec.Cmd {
+	cmd := exec.Command(name, arg...)
+	cmd.Env = environWithFixedLang()
+	logCMD(logger, cmd)
+	return cmd
+}
+
+// commandPassOutput calls command and sets Stdout and Stderr to os.Stdout and os.Stderr.
+func commandPassOutput(logger *slog.Logger, name string, arg ...string) *exec.Cmd {
+	cmd := command(logger, name, arg...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd
+}
+
 func initializePostgresDir(dbDir string, logger *slog.Logger, cfg *pgConfig) error {
 	// Debian/Ubuntu: initdb is not in PATH; find it with pg_config
 	initDBPath := cfg.binPath("initdb")
@@ -195,10 +226,7 @@ func initializePostgresDir(dbDir string, logger *slog.Logger, cfg *pgConfig) err
 	// --no-sync: return without waiting for fsync
 	// --pgdata: specify cluster database
 	// --username: use postgres as the superuser (I believe this changed)
-	cmd := exec.Command(initDBPath, "--no-sync", "--pgdata="+dbDir)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	logCMD(logger, cmd)
+	cmd := commandPassOutput(logger, initDBPath, "--no-sync", "--pgdata="+dbDir)
 	return cmd.Run()
 }
 

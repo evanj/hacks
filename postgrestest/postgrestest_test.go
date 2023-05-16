@@ -11,6 +11,11 @@ import (
 )
 
 func TestNew(t *testing.T) {
+	// Postgres depends on the locale; on Mac OS X this fails with:
+	// FATAL: postmaster became multithreaded during startup.
+	// HINT: Set the LC_ALL environment variable to a valid locale.
+	t.Setenv("LANG", "")
+
 	postgresURL := New(t)
 	ctx := context.Background()
 	conn, err := pgx.Connect(ctx, postgresURL)
