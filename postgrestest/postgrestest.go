@@ -234,11 +234,18 @@ func (i *Instance) socketPath() string {
 	return filepath.Join(i.dbDir, pgSocketFileName)
 }
 
-// URL returns the Postgres connection URL in the form "postgresql://...". See:
+// URL returns the Postgres connection URL using a Unix socket in the form "postgresql://...". See:
 // https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
 func (i *Instance) URL() string {
 	// https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
 	return "postgresql:///postgres?host=" + i.dbDir
+}
+
+// LocalhostURL returns the Postgres connection URL using a localhost TCP socket. This will only
+// work if using Options.ListenOnLocalhost=true. Most callers should use URL() instead.
+func (i *Instance) LocalhostURL() string {
+	// https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
+	return "postgresql://127.0.0.1:5432/postgres"
 }
 
 // Close shuts down Postgres and deletes the temporary directory.

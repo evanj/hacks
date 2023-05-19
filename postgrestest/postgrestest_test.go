@@ -32,8 +32,6 @@ func TestNew(t *testing.T) {
 	}
 }
 
-const localhostPGURL = "postgresql://127.0.0.1:5432/postgres"
-
 func TestNewInstance(t *testing.T) {
 	instance, err := NewInstance()
 	if err != nil {
@@ -42,7 +40,7 @@ func TestNewInstance(t *testing.T) {
 	defer instance.Close()
 
 	// must not listen on localhost by default
-	_, err = pgx.Connect(context.Background(), localhostPGURL)
+	_, err = pgx.Connect(context.Background(), instance.LocalhostURL())
 	var errno syscall.Errno
 	if !(errors.As(err, &errno) && errno == syscall.ECONNREFUSED) {
 		t.Errorf("connect to localhost must fail: expected err to be ECONNREFUSED, was err=%v", err)
@@ -74,7 +72,7 @@ func TestNewInstanceWithLocalhostOptions(t *testing.T) {
 
 	// must be able to connect on localhost
 	ctx := context.Background()
-	conn, err := pgx.Connect(ctx, localhostPGURL)
+	conn, err := pgx.Connect(ctx, instance.LocalhostURL())
 	if err != nil {
 		t.Fatal(err)
 	}
