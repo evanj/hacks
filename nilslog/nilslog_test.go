@@ -29,7 +29,7 @@ func TestNil(t *testing.T) {
 
 func TestNewIfNil(t *testing.T) {
 	buf := &bytes.Buffer{}
-	logger := slog.New(slog.NewTextHandler(buf))
+	logger := slog.New(slog.NewTextHandler(buf, nil))
 
 	NewIfNil(logger).Error("should log")
 	NewIfNil(nil).Error("should not log")
