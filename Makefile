@@ -8,6 +8,10 @@ NODE_DIR:=$(BUILD_DIR)/node
 .PHONY: all clean
 
 all: protodecode/protodemo/demo.pb.go $(NODE_DIR)
+	# archlevel has architecture-specific code in it: make sure it compiles
+	GOOS=linux go build -o /dev/null ./archlevel
+	GOOS=darwin go build -o /dev/null ./archlevel
+
 	goimports -l -w .
 	CGO_ENABLED=1 go test -race -shuffle=on -count=2 ./...
 	go vet ./...
