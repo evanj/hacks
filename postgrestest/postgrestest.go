@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -33,6 +34,9 @@ type Options struct {
 	ListenOnLocalhost bool
 	// If not nil, verbose information will be logged.
 	Logger *slog.Logger
+	// If not 0, listen globally on GlobalPort. The default Postgres port is 5432. This cannot
+	// be set together with ListenOnLocalhost, since this implies ListenOnLocalhost=true.
+	GlobalPort int
 }
 
 // New creates a new Postgres instance and returns a connection string URL in the
@@ -68,7 +72,7 @@ func NewInstance() (*Instance, error) {
 	return NewInstanceWithOptions(Options{})
 }
 
-// environWithFixedLang replaces the LANG environment variable with cUTF8Locale
+// environWithFixedLang replaces the LANG environment variable with enUTF8Locale
 func environWithFixedLang() []string {
 	environ := os.Environ()
 	for i, variable := range environ {
@@ -88,6 +92,13 @@ func environWithFixedLang() []string {
 // The Postgres instance will use the "en_US.UTF-8" locale to ensure that tests don't depend on the
 // local environment.
 func NewInstanceWithOptions(options Options) (*Instance, error) {
+	if options.ListenOnLocalhost && options.GlobalPort != 0 {
+		return nil, errors.New("cannot set both ListenOnLocalhost and GlobalPort")
+	}
+	if options.GlobalPort < 0 || options.GlobalPort >= (1<<16) {
+		return nil, fmt.Errorf("invalid GlobalPort=%d", options.GlobalPort)
+	}
+
 	options.Logger = nilslog.NewIfNil(options.Logger)
 
 	shouldCleanUpDir := true
@@ -116,11 +127,15 @@ func NewInstanceWithOptions(options Options) (*Instance, error) {
 	// socket can't exceed 100 characters
 	postgresPath := cfg.binPath("postgres")
 
+	// -h "" means "do not listen for TCP"
+	// -h "*" means listen on all addresses
 	// TODO: Add tuning parameters? E.g. -c shared_buffers='1G'?
 	args := []string{"-D", dir, "-k", "."}
 	if !options.ListenOnLocalhost {
 		// default for Postgres: listen on localhost; default for this module: only unix sockets
 		args = append(args, "-h", "")
+	} else if options.GlobalPort > 0 {
+		args = append(args, "-h", "*", "-p", strconv.Itoa(options.GlobalPort))
 	}
 	proc := commandPassOutput(options.Logger, postgresPath, args...)
 	err = proc.Start()

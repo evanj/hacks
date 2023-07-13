@@ -3,7 +3,10 @@ package postgrestest
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net"
 	"os"
+	"strings"
 	"syscall"
 	"testing"
 
@@ -83,5 +86,73 @@ func TestNewInstanceWithLocalhostOptions(t *testing.T) {
 	err = conn.Close(ctx)
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	// must not be able to connect on other addresses
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, addr := range addrs {
+		ipNetAddr := addr.(*net.IPNet)
+		if ipNetAddr.IP.IsGlobalUnicast() {
+			pgURL := fmt.Sprintf("postgresql://%s/postgres", net.JoinHostPort(ipNetAddr.IP.String(), "5432"))
+
+			_, err = pgx.Connect(ctx, pgURL)
+			if !errors.Is(err, syscall.ECONNREFUSED) {
+				t.Errorf("addr=%s ; pgURL=%s: expected ECONNREFUSED, was: %s", addr, pgURL, err)
+			}
+		}
+	}
+}
+
+func TestNewInstanceWithGlobalOption(t *testing.T) {
+	instance, err := NewInstanceWithOptions(Options{GlobalPort: 12345})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer instance.Close()
+
+	// must be able to connect on all addresses
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, addr := range addrs {
+		ipNetAddr := addr.(*net.IPNet)
+		if ipNetAddr.IP.IsGlobalUnicast() || ipNetAddr.IP.IsLoopback() {
+			pgURL := fmt.Sprintf("postgresql://%s/postgres",
+				net.JoinHostPort(ipNetAddr.IP.String(), "5432"))
+
+			ctx := context.Background()
+			_, err = pgx.Connect(ctx, pgURL)
+			if !errors.Is(err, syscall.ECONNREFUSED) {
+				t.Errorf("addr=%s ; pgURL=%s: expected ECONNREFUSED, was: %s", addr, pgURL, err)
+			}
+		}
+	}
+}
+
+func TestNewInstanceWithOptionsError(t *testing.T) {
+	instance, err := NewInstanceWithOptions(Options{ListenOnLocalhost: true, GlobalPort: 12345})
+	if instance != nil {
+		t.Error(instance)
+	}
+	if !strings.Contains(err.Error(), "cannot set both") {
+		t.Error(err)
+	}
+	instance, err = NewInstanceWithOptions(Options{GlobalPort: -1})
+	if instance != nil {
+		t.Error(instance)
+	}
+	if !strings.Contains(err.Error(), "invalid GlobalPort") {
+		t.Error(err)
+	}
+	instance, err = NewInstanceWithOptions(Options{GlobalPort: 1 << 16})
+	if instance != nil {
+		t.Error(instance)
+	}
+	if !strings.Contains(err.Error(), "invalid GlobalPort") {
+		t.Error(err)
 	}
 }
