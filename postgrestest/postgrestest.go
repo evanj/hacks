@@ -23,10 +23,13 @@ import (
 	"golang.org/x/exp/slog"
 )
 
-const pgSocketFileName = ".s.PGSQL.5432"
+// the port number must be appended to complete this
+const pgSocketFileNamePrefix = ".s.PGSQL."
 
 const langEnvVar = "LANG"
 const enUTF8Locale = "en_US.UTF-8"
+
+const defaultPort = 5432
 
 // Options configures the Postgres instance.
 type Options struct {
@@ -61,9 +64,10 @@ func New(t testing.TB) string {
 
 // Instance contains the state of a new temporary Postgres instance.
 type Instance struct {
-	proc  *exec.Cmd
-	cfg   *pgConfig
-	dbDir string
+	proc       *exec.Cmd
+	cfg        *pgConfig
+	dbDir      string
+	globalPort int
 }
 
 // NewInstance calls NewInstanceWithOptions() with the default options. The caller must call Close()
@@ -127,15 +131,17 @@ func NewInstanceWithOptions(options Options) (*Instance, error) {
 	// socket can't exceed 100 characters
 	postgresPath := cfg.binPath("postgres")
 
-	// -h "" means "do not listen for TCP"
-	// -h "*" means listen on all addresses
+	// default for Postgres with no arguments: listen on localhost
+	// -h "": do not listen for TCP
+	// -h "*": listen on all addresses
 	// TODO: Add tuning parameters? E.g. -c shared_buffers='1G'?
 	args := []string{"-D", dir, "-k", "."}
 	if !options.ListenOnLocalhost {
-		// default for Postgres: listen on localhost; default for this module: only unix sockets
-		args = append(args, "-h", "")
-	} else if options.GlobalPort > 0 {
-		args = append(args, "-h", "*", "-p", strconv.Itoa(options.GlobalPort))
+		if options.GlobalPort == 0 {
+			args = append(args, "-h", "")
+		} else {
+			args = append(args, "-h", "*", "-p", strconv.Itoa(options.GlobalPort))
+		}
 	}
 	proc := commandPassOutput(options.Logger, postgresPath, args...)
 	err = proc.Start()
@@ -150,7 +156,7 @@ func NewInstanceWithOptions(options Options) (*Instance, error) {
 		}
 	}()
 
-	instance := &Instance{proc, cfg, dir}
+	instance := &Instance{proc, cfg, dir, options.GlobalPort}
 
 	// poll for the socket to be created
 	const maxPolls = 40
@@ -246,21 +252,28 @@ func initializePostgresDir(dbDir string, logger *slog.Logger, cfg *pgConfig) err
 }
 
 func (i *Instance) socketPath() string {
-	return filepath.Join(i.dbDir, pgSocketFileName)
+	return filepath.Join(i.dbDir, pgSocketFileNamePrefix+strconv.Itoa(i.port()))
 }
 
 // URL returns the Postgres connection URL using a Unix socket in the form "postgresql://...". See:
 // https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
 func (i *Instance) URL() string {
 	// https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
-	return "postgresql:///postgres?host=" + i.dbDir
+	return "postgresql:///postgres?host=" + i.dbDir + "&port=" + strconv.Itoa(i.port())
+}
+
+func (i *Instance) port() int {
+	if i.globalPort != 0 {
+		return i.globalPort
+	}
+	return defaultPort
 }
 
 // LocalhostURL returns the Postgres connection URL using a localhost TCP socket. This will only
 // work if using Options.ListenOnLocalhost=true. Most callers should use URL() instead.
 func (i *Instance) LocalhostURL() string {
 	// https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
-	return "postgresql://127.0.0.1:5432/postgres"
+	return fmt.Sprintf("postgresql://127.0.0.1:%d/postgres", i.port())
 }
 
 // Close shuts down Postgres and deletes the temporary directory.

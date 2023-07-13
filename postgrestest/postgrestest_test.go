@@ -9,8 +9,10 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/exp/slog"
 )
 
 func TestNew(t *testing.T) {
@@ -98,8 +100,12 @@ func TestNewInstanceWithLocalhostOptions(t *testing.T) {
 		if ipNetAddr.IP.IsGlobalUnicast() {
 			pgURL := fmt.Sprintf("postgresql://%s/postgres", net.JoinHostPort(ipNetAddr.IP.String(), "5432"))
 
-			_, err = pgx.Connect(ctx, pgURL)
-			if !errors.Is(err, syscall.ECONNREFUSED) {
+			// Mac OS X by default firewalls all IPs so external IPs won't work but localhost will
+			t.Log(pgURL)
+			ctxWithTimeout, cancel := context.WithTimeout(ctx, time.Second)
+			_, err = pgx.Connect(ctxWithTimeout, pgURL)
+			cancel()
+			if !(errors.Is(err, context.DeadlineExceeded) || errors.Is(err, syscall.ECONNREFUSED)) {
 				t.Errorf("addr=%s ; pgURL=%s: expected ECONNREFUSED, was: %s", addr, pgURL, err)
 			}
 		}
@@ -107,13 +113,43 @@ func TestNewInstanceWithLocalhostOptions(t *testing.T) {
 }
 
 func TestNewInstanceWithGlobalOption(t *testing.T) {
-	instance, err := NewInstanceWithOptions(Options{GlobalPort: 12345})
+	instance, err := NewInstanceWithOptions(Options{
+		Logger:     slog.Default(),
+		GlobalPort: 12345,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer instance.Close()
 
-	// must be able to connect on all addresses
+	// must be able to connect on Unix and localhost
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, instance.URL())
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = conn.Ping(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = conn.Close(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn, err = pgx.Connect(ctx, instance.LocalhostURL())
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = conn.Ping(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = conn.Close(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// might be able to connect on other addresses (depends on firewalls)
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
 		t.Fatal(err)
@@ -122,12 +158,20 @@ func TestNewInstanceWithGlobalOption(t *testing.T) {
 		ipNetAddr := addr.(*net.IPNet)
 		if ipNetAddr.IP.IsGlobalUnicast() || ipNetAddr.IP.IsLoopback() {
 			pgURL := fmt.Sprintf("postgresql://%s/postgres",
-				net.JoinHostPort(ipNetAddr.IP.String(), "5432"))
+				net.JoinHostPort(ipNetAddr.IP.String(), "12345"))
 
-			ctx := context.Background()
-			_, err = pgx.Connect(ctx, pgURL)
-			if !errors.Is(err, syscall.ECONNREFUSED) {
-				t.Errorf("addr=%s ; pgURL=%s: expected ECONNREFUSED, was: %s", addr, pgURL, err)
+			t.Log(pgURL)
+			ctxWithTimeout, cancel := context.WithTimeout(context.Background(), time.Second)
+			conn, err := pgx.Connect(ctxWithTimeout, pgURL)
+			cancel()
+			if !(err == nil || errors.Is(err, context.DeadlineExceeded)) {
+				t.Errorf("addr=%s ; pgURL=%s: expected success, was: %s", addr, pgURL, err)
+			}
+			if conn != nil {
+				err = conn.Close(context.Background())
+				if err != nil {
+					t.Fatal(err)
+				}
 			}
 		}
 	}
