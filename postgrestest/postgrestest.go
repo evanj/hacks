@@ -26,6 +26,8 @@ import (
 // the port number must be appended to complete this
 const pgSocketFileNamePrefix = ".s.PGSQL."
 
+// LANG=C sets the "default" C locale, which is really "no locale support"
+// we call initdb with arguments to use a default ICU locale with reasonable Unicode support
 const langEnvVar = "LANG"
 const cLocale = "C"
 
@@ -243,10 +245,17 @@ func initializePostgresDir(dbDir string, logger *slog.Logger, cfg *pgConfig) err
 	// Debian/Ubuntu: initdb is not in PATH; find it with pg_config
 	initDBPath := cfg.binPath("initdb")
 
+	// --locale-provider=icu: Use ICU instead of libc for locales
+	// --encoding=UTF8: Use UTF-8; don't rely on locale
 	// --no-sync: return without waiting for fsync
 	// --pgdata: specify cluster database
 	// --username: use postgres as the superuser (I believe this changed)
-	cmd := commandPassOutput(logger, initDBPath, "--no-sync", "--pgdata="+dbDir)
+	cmd := commandPassOutput(logger, initDBPath,
+		"--locale-provider=icu",
+		"--encoding=UTF8",
+		"--icu-locale=und-x-icu",
+		"--no-sync",
+		"--pgdata="+dbDir)
 	return cmd.Run()
 }
 

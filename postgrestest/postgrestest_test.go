@@ -16,9 +16,11 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	// Postgres depends on the locale; on Mac OS X this fails with:
+	// Postgres requires the locale to be set. on Mac OS X this fails with:
 	// FATAL: postmaster became multithreaded during startup.
 	// HINT: Set the LC_ALL environment variable to a valid locale.
+	// This test ensures that no matter what the external LANG is set to,
+	// we set it to something reasonable
 	t.Setenv("LANG", "")
 
 	postgresURL := New(t)
@@ -27,10 +29,29 @@ func TestNew(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = conn.Ping(ctx)
+
+	// ensure the server's character encoding is UTF-8
+	var serverEncoding string
+	err = conn.QueryRow(ctx, `SHOW server_encoding`).Scan(&serverEncoding)
 	if err != nil {
 		t.Fatal(err)
 	}
+	if serverEncoding != "UTF8" {
+		t.Errorf("expected server encoding UTF8; was %s", serverEncoding)
+	}
+
+	// Ensure we have set an ICO locale
+	var upperPostgresResult string
+	const lowerInput = "héllo"
+	err = conn.QueryRow(ctx, `SELECT UPPER('`+lowerInput+`')`).Scan(&upperPostgresResult)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.ToUpper(lowerInput) != upperPostgresResult {
+		t.Errorf("expected UPPER('%s')=%s; was %s: collation error",
+			lowerInput, strings.ToUpper(lowerInput), upperPostgresResult)
+	}
+
 	err = conn.Close(ctx)
 	if err != nil {
 		t.Fatal(err)
