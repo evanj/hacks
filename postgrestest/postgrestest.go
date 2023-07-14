@@ -27,7 +27,7 @@ import (
 const pgSocketFileNamePrefix = ".s.PGSQL."
 
 const langEnvVar = "LANG"
-const enUTF8Locale = "en_US.UTF-8"
+const cLocale = "C"
 
 const defaultPort = 5432
 
@@ -76,7 +76,7 @@ func NewInstance() (*Instance, error) {
 	return NewInstanceWithOptions(Options{})
 }
 
-// environWithFixedLang replaces the LANG environment variable with enUTF8Locale
+// environWithFixedLang replaces the LANG environment variable with cLocale
 func environWithFixedLang() []string {
 	environ := os.Environ()
 	for i, variable := range environ {
@@ -85,7 +85,7 @@ func environWithFixedLang() []string {
 			break
 		}
 	}
-	environ = append(environ, langEnvVar+"="+enUTF8Locale)
+	environ = append(environ, langEnvVar+"="+cLocale)
 	return environ
 }
 
@@ -93,8 +93,7 @@ func environWithFixedLang() []string {
 // call Close() to ensure it is stopped and the temporary space is deleted. Tests should prefer to
 // call New().
 //
-// The Postgres instance will use the "en_US.UTF-8" locale to ensure that tests don't depend on the
-// local environment.
+// Postgres will use the "C" locale to ensure that tests don't depend on the local environment.
 func NewInstanceWithOptions(options Options) (*Instance, error) {
 	if options.ListenOnLocalhost && options.GlobalPort != 0 {
 		return nil, errors.New("cannot set both ListenOnLocalhost and GlobalPort")

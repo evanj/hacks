@@ -25,6 +25,10 @@ all: protodecode/protodemo/demo.pb.go $(NODE_DIR)
 	echo "typescript version:"
 	go run ./runtypescript --nodeDir=$(NODE_DIR) -- --version
 
+	# ensure locale works in a minimal Linux container
+	docker build -f Dockerfile-testing .
+	echo "SUCCESS"
+
 $(NODE_DIR): runtypescript/runtypescript.go | $(BUILD_DIR)
 	$(RM) -r $@
 	go run $< --verbose --nodeDir=$@ -- --version

@@ -1,0 +1,10 @@
+# Ensures Postgres works in a minimal environment
+# Previously we used a locale that is not installed by default ("en_US.UTF-8")
+FROM golang:1.20.6-bookworm AS go_with_postgres
+RUN apt-get update && \
+    apt-get install --yes --no-install-recommends --no-install-suggests postgresql-15
+
+FROM go_with_postgres
+COPY . /go/hacks
+RUN cd /go/hacks && \
+    su postgres --command="go test ./postgrestest"
