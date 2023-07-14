@@ -16,21 +16,26 @@ import (
 
 const psqlBinName = "psql"
 
-func startPostgresAndPSQL(listenOnLocalhost bool, verbose bool) {
+func startPostgresAndPSQL(listenOnLocalhost bool, verbose bool, insecureGlobalPort int) {
 	logger := nilslog.New()
 	if verbose {
 		logger = slog.Default()
 	}
 
 	options := postgrestest.Options{
-		ListenOnLocalhost: listenOnLocalhost,
-		Logger:            logger,
+		ListenOnLocalhost:  listenOnLocalhost,
+		Logger:             logger,
+		InsecureGlobalPort: insecureGlobalPort,
 	}
 	instance, err := postgrestest.NewInstanceWithOptions(options)
 	if err != nil {
 		panic(err)
 	}
 	defer instance.Close()
+
+	if insecureGlobalPort != 0 {
+		fmt.Printf("remote URL: %s\n", instance.RemoteURL())
+	}
 
 	fmt.Printf("starting psql connection=%s ...\n", instance.URL())
 	psql := exec.Command(instance.BinPath(psqlBinName), instance.URL())
@@ -62,8 +67,9 @@ func startPostgresAndPSQL(listenOnLocalhost bool, verbose bool) {
 
 func main() {
 	listenOnLocalhost := flag.Bool("listenOnLocalhost", false, "Listens on localhost if set")
+	insecureGlobalPort := flag.Int("insecureGlobalPort", 0, "If set, listens for global TCP connections")
 	verbose := flag.Bool("verbose", false, "Logs verbose commands if set")
 	flag.Parse()
 
-	startPostgresAndPSQL(*listenOnLocalhost, *verbose)
+	startPostgresAndPSQL(*listenOnLocalhost, *verbose, *insecureGlobalPort)
 }

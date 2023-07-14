@@ -4,13 +4,17 @@ package postgrestest
 
 import (
 	"bytes"
+	"context"
+	cryptorand "crypto/rand"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"net"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -19,12 +23,15 @@ import (
 	"time"
 
 	"github.com/evanj/hacks/nilslog"
+	"github.com/jackc/pgx/v5"
 	"golang.org/x/exp/slices"
 	"golang.org/x/exp/slog"
 )
 
 // the port number must be appended to complete this
 const pgSocketFileNamePrefix = ".s.PGSQL."
+
+const pgAuthConfigFileName = "pg_hba.conf"
 
 // LANG=C sets the "default" C locale, which is really "no locale support"
 // we call initdb with arguments to use a default ICU locale with reasonable Unicode support
@@ -39,9 +46,11 @@ type Options struct {
 	ListenOnLocalhost bool
 	// If not nil, verbose information will be logged.
 	Logger *slog.Logger
-	// If not 0, listen globally on GlobalPort. The default Postgres port is 5432. This cannot
-	// be set together with ListenOnLocalhost, since this implies ListenOnLocalhost=true.
-	GlobalPort int
+	// If not 0, listen globally on InsecureGlobalPort. This is insecure because it will allow
+	// connections from any IP address, although it will require a password. The default Postgres
+	// port is 5432. InsecureGlobalPort cannot be set together with ListenOnLocalhost, since this
+	// overrides ListenOnLocalhost, so just set this option.
+	InsecureGlobalPort int
 }
 
 // New creates a new Postgres instance and returns a connection string URL in the
@@ -70,6 +79,8 @@ type Instance struct {
 	cfg        *pgConfig
 	dbDir      string
 	globalPort int
+	username   string
+	password   string
 }
 
 // NewInstance calls NewInstanceWithOptions() with the default options. The caller must call Close()
@@ -97,11 +108,11 @@ func environWithFixedLang() []string {
 //
 // Postgres will use the "C" locale to ensure that tests don't depend on the local environment.
 func NewInstanceWithOptions(options Options) (*Instance, error) {
-	if options.ListenOnLocalhost && options.GlobalPort != 0 {
+	if options.ListenOnLocalhost && options.InsecureGlobalPort != 0 {
 		return nil, errors.New("cannot set both ListenOnLocalhost and GlobalPort")
 	}
-	if options.GlobalPort < 0 || options.GlobalPort >= (1<<16) {
-		return nil, fmt.Errorf("invalid GlobalPort=%d", options.GlobalPort)
+	if options.InsecureGlobalPort < 0 || options.InsecureGlobalPort >= (1<<16) {
+		return nil, fmt.Errorf("invalid GlobalPort=%d", options.InsecureGlobalPort)
 	}
 
 	options.Logger = nilslog.NewIfNil(options.Logger)
@@ -127,6 +138,18 @@ func NewInstanceWithOptions(options Options) (*Instance, error) {
 		return nil, err
 	}
 
+	// add pg_hba.conf entries if needed
+	if options.InsecureGlobalPort != 0 {
+		f, err := os.OpenFile(filepath.Join(dir, pgAuthConfigFileName), os.O_APPEND|os.O_WRONLY, 0000)
+		if err != nil {
+			return nil, err
+		}
+		_, err = fmt.Fprintf(f, "\nhostnossl all all 0.0.0.0/0 scram-sha-256\nhostnossl all all ::0/0 scram-sha-256\n")
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// By default Postgres puts its Unix-domain socket in /tmp; "-k ." puts it in the data dir.
 	// however, then on Mac OS X we get "socket name too long" because the absolute path to the
 	// socket can't exceed 100 characters
@@ -138,10 +161,10 @@ func NewInstanceWithOptions(options Options) (*Instance, error) {
 	// TODO: Add tuning parameters? E.g. -c shared_buffers='1G'?
 	args := []string{"-D", dir, "-k", "."}
 	if !options.ListenOnLocalhost {
-		if options.GlobalPort == 0 {
+		if options.InsecureGlobalPort == 0 {
 			args = append(args, "-h", "")
 		} else {
-			args = append(args, "-h", "*", "-p", strconv.Itoa(options.GlobalPort))
+			args = append(args, "-h", "*", "-p", strconv.Itoa(options.InsecureGlobalPort))
 		}
 	}
 	proc := commandPassOutput(options.Logger, postgresPath, args...)
@@ -157,7 +180,21 @@ func NewInstanceWithOptions(options Options) (*Instance, error) {
 		}
 	}()
 
-	instance := &Instance{proc, cfg, dir, options.GlobalPort}
+	currentUser, err := user.Current()
+	if err != nil {
+		return nil, err
+	}
+	password := ""
+	if options.InsecureGlobalPort != 0 {
+		passwordBytes := make([]byte, 8)
+		_, err = cryptorand.Reader.Read(passwordBytes)
+		if err != nil {
+			return nil, err
+		}
+		password = hex.EncodeToString(passwordBytes)
+	}
+
+	instance := &Instance{proc, cfg, dir, options.InsecureGlobalPort, currentUser.Username, password}
 
 	// poll for the socket to be created
 	const maxPolls = 40
@@ -185,9 +222,33 @@ func NewInstanceWithOptions(options Options) (*Instance, error) {
 		return nil, err
 	}
 
+	if options.InsecureGlobalPort != 0 {
+		// this adds a pgx dependency which we already use for the test anyway
+		// TODO: remove connectUntilReady and replace with pgx
+		ctx := context.Background()
+		conn, err := pgx.Connect(ctx, instance.LocalhostURL())
+		if err != nil {
+			return nil, err
+		}
+		defer conn.Close(ctx)
+		statement := fmt.Sprintf("ALTER USER %s WITH PASSWORD $1",
+			doubleQuoteIdentifier(instance.username))
+		// ALTER USER needs the simple protocol for the $1 parameter replacement to work
+		_, err = conn.Exec(ctx, statement,
+			pgx.QueryExecModeSimpleProtocol, instance.password)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	shouldCleanUpDir = false
 	shouldKillPostgres = false
 	return instance, err
+}
+
+// https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS
+func doubleQuoteIdentifier(s string) string {
+	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
 }
 
 // BinPath returns the absolute path to commandName in the Postgres binary directory.
@@ -282,6 +343,29 @@ func (i *Instance) port() int {
 func (i *Instance) LocalhostURL() string {
 	// https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
 	return fmt.Sprintf("postgresql://127.0.0.1:%d/postgres", i.port())
+}
+
+// RemoteURL returns the firs Postgres connection URL using a localhost TCP socket. This will only
+// work if using Options.ListenOnLocalhost=true. Most callers should use URL() instead.
+func (i *Instance) RemoteURL() string {
+	addresses, err := net.InterfaceAddrs()
+	if err != nil {
+		panic(err)
+	}
+	for _, address := range addresses {
+		// TODO: skip other kinds of addresses?
+		ipAddress := address.(*net.IPNet)
+		if ipAddress.IP.IsGlobalUnicast() {
+			return i.RemoteURLForAddress(ipAddress.IP.String())
+		}
+	}
+	// TODO: log a warning?
+	return i.RemoteURLForAddress("127.0.0.1")
+}
+
+func (i *Instance) RemoteURLForAddress(address string) string {
+	return fmt.Sprintf("postgresql://%s:%s@%s/postgres",
+		i.username, i.password, net.JoinHostPort(address, strconv.Itoa(i.port())))
 }
 
 // Close shuts down Postgres and deletes the temporary directory.

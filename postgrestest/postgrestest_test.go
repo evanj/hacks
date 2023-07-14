@@ -3,7 +3,6 @@ package postgrestest
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net"
 	"os"
 	"strings"
@@ -14,6 +13,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/exp/slog"
 )
+
+const connectTimeout = 100 * time.Millisecond
 
 func TestNew(t *testing.T) {
 	// Postgres requires the locale to be set. on Mac OS X this fails with:
@@ -119,11 +120,11 @@ func TestNewInstanceWithLocalhostOptions(t *testing.T) {
 	for _, addr := range addrs {
 		ipNetAddr := addr.(*net.IPNet)
 		if ipNetAddr.IP.IsGlobalUnicast() {
-			pgURL := fmt.Sprintf("postgresql://%s/postgres", net.JoinHostPort(ipNetAddr.IP.String(), "5432"))
+			pgURL := instance.RemoteURLForAddress(ipNetAddr.IP.String())
 
 			// Mac OS X by default firewalls all IPs so external IPs won't work but localhost will
 			t.Log(pgURL)
-			ctxWithTimeout, cancel := context.WithTimeout(ctx, time.Second)
+			ctxWithTimeout, cancel := context.WithTimeout(ctx, connectTimeout)
 			_, err = pgx.Connect(ctxWithTimeout, pgURL)
 			cancel()
 			if !(errors.Is(err, context.DeadlineExceeded) || errors.Is(err, syscall.ECONNREFUSED)) {
@@ -135,8 +136,8 @@ func TestNewInstanceWithLocalhostOptions(t *testing.T) {
 
 func TestNewInstanceWithGlobalOption(t *testing.T) {
 	instance, err := NewInstanceWithOptions(Options{
-		Logger:     slog.Default(),
-		GlobalPort: 12345,
+		Logger:             slog.Default(),
+		InsecureGlobalPort: 12345,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -170,6 +171,12 @@ func TestNewInstanceWithGlobalOption(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// tests that the password is included but also that RemoteURL works
+	u := instance.RemoteURL()
+	if !strings.Contains(u, instance.password) {
+		t.Error("url should contain password")
+	}
+
 	// might be able to connect on other addresses (depends on firewalls)
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
@@ -178,11 +185,10 @@ func TestNewInstanceWithGlobalOption(t *testing.T) {
 	for _, addr := range addrs {
 		ipNetAddr := addr.(*net.IPNet)
 		if ipNetAddr.IP.IsGlobalUnicast() || ipNetAddr.IP.IsLoopback() {
-			pgURL := fmt.Sprintf("postgresql://%s/postgres",
-				net.JoinHostPort(ipNetAddr.IP.String(), "12345"))
+			pgURL := instance.RemoteURLForAddress(ipNetAddr.IP.String())
 
 			t.Log(pgURL)
-			ctxWithTimeout, cancel := context.WithTimeout(context.Background(), time.Second)
+			ctxWithTimeout, cancel := context.WithTimeout(context.Background(), connectTimeout)
 			conn, err := pgx.Connect(ctxWithTimeout, pgURL)
 			cancel()
 			if !(err == nil || errors.Is(err, context.DeadlineExceeded)) {
@@ -199,21 +205,21 @@ func TestNewInstanceWithGlobalOption(t *testing.T) {
 }
 
 func TestNewInstanceWithOptionsError(t *testing.T) {
-	instance, err := NewInstanceWithOptions(Options{ListenOnLocalhost: true, GlobalPort: 12345})
+	instance, err := NewInstanceWithOptions(Options{ListenOnLocalhost: true, InsecureGlobalPort: 12345})
 	if instance != nil {
 		t.Error(instance)
 	}
 	if !strings.Contains(err.Error(), "cannot set both") {
 		t.Error(err)
 	}
-	instance, err = NewInstanceWithOptions(Options{GlobalPort: -1})
+	instance, err = NewInstanceWithOptions(Options{InsecureGlobalPort: -1})
 	if instance != nil {
 		t.Error(instance)
 	}
 	if !strings.Contains(err.Error(), "invalid GlobalPort") {
 		t.Error(err)
 	}
-	instance, err = NewInstanceWithOptions(Options{GlobalPort: 1 << 16})
+	instance, err = NewInstanceWithOptions(Options{InsecureGlobalPort: 1 << 16})
 	if instance != nil {
 		t.Error(instance)
 	}
