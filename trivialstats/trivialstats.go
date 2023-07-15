@@ -4,8 +4,13 @@
 package trivialstats
 
 import (
+	"fmt"
 	"math"
+	"slices"
 )
+
+// a 4 kiB page in case that helps memory allocation somehow
+const distributionChunkSize = 4096 / 8
 
 // AverageMinMax computes the average, minimum and maximum of a set of values.
 type AverageMinMax struct {
@@ -86,4 +91,66 @@ func (a *AverageMinMax) Record(value int64) {
 	if value > a.max {
 		a.max = value
 	}
+}
+
+// Distribution records all samples to provide exact percentiles.
+// More serious applications should use https://github.com/DataDog/sketches-go.
+type Distribution struct {
+	// records samples in separate chunks to limit the "worst case" delay in Add()
+	sampleChunks [][]int64
+}
+
+func NewDistribution() *Distribution {
+	return &Distribution{[][]int64{make([]int64, 0, distributionChunkSize)}}
+}
+
+func (d *Distribution) Add(sample int64) {
+	last := d.sampleChunks[len(d.sampleChunks)-1]
+	if len(last) >= distributionChunkSize {
+		last = make([]int64, 0, distributionChunkSize)
+		d.sampleChunks = append(d.sampleChunks, last)
+	}
+	d.sampleChunks[len(d.sampleChunks)-1] = append(last, sample)
+}
+
+func (d *Distribution) Stats() DistributionStats {
+	allValues := d.sampleChunks[0]
+	for _, chunks := range d.sampleChunks[1:] {
+		allValues = append(allValues, chunks...)
+	}
+
+	slices.Sort(allValues)
+
+	total := int64(0)
+	for _, v := range allValues {
+		total += v
+	}
+
+	return DistributionStats{
+		allValues[0],
+		allValues[len(allValues)-1],
+		float64(total) / float64(len(allValues)),
+		int64(len(allValues)),
+
+		allValues[int(float64(len(allValues))*0.5)],
+		allValues[int(float64(len(allValues))*0.9)],
+		allValues[int(float64(len(allValues))*0.95)],
+	}
+}
+
+type DistributionStats struct {
+	Min   int64
+	Max   int64
+	Avg   float64
+	Count int64
+
+	P50 int64
+	P90 int64
+	P95 int64
+}
+
+func (d DistributionStats) String() string {
+	return fmt.Sprintf("count=%d avg=%.1f min=%d p50=%d p90=%d p95=%d max=%d",
+		d.Count, d.Avg, d.Min, d.P50, d.P90, d.P95, d.Max,
+	)
 }

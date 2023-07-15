@@ -169,3 +169,40 @@ func TestAddOverflow(t *testing.T) {
 		}
 	}
 }
+
+func TestDistribution(t *testing.T) {
+	d := NewDistribution()
+	for i := int64(0); i < 10; i++ {
+		d.Add(i)
+	}
+	stats := d.Stats()
+	expected := DistributionStats{
+		0,
+		9,
+		4.5,
+		10,
+
+		5,
+		9,
+		9,
+	}
+	if expected != stats {
+		t.Errorf("expected=%#v != stats=%#v", expected, stats)
+	}
+
+	d.Add(10)
+	stats = d.Stats()
+	expected = DistributionStats{
+		0,
+		10,
+		5.0,
+		11,
+
+		5,
+		9,
+		10,
+	}
+	if expected != stats {
+		t.Errorf("expected=%#v != stats=%#v", expected, stats)
+	}
+}
