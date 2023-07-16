@@ -51,6 +51,9 @@ type Options struct {
 	// port is 5432. InsecureGlobalPort cannot be set together with ListenOnLocalhost, since this
 	// overrides ListenOnLocalhost, so just set this option.
 	InsecureGlobalPort int
+	// Set Postgres's shared_buffers for the buffer pool cache in bytes. See:
+	// https://www.postgresql.org/docs/current/runtime-config-resource.html
+	SharedBuffers int
 }
 
 // New creates a new Postgres instance and returns a connection string URL in the
@@ -158,7 +161,6 @@ func NewInstanceWithOptions(options Options) (*Instance, error) {
 	// default for Postgres with no arguments: listen on localhost
 	// -h "": do not listen for TCP
 	// -h "*": listen on all addresses
-	// TODO: Add tuning parameters? E.g. -c shared_buffers='1G'?
 	args := []string{"-D", dir, "-k", "."}
 	if !options.ListenOnLocalhost {
 		if options.InsecureGlobalPort == 0 {
@@ -166,6 +168,9 @@ func NewInstanceWithOptions(options Options) (*Instance, error) {
 		} else {
 			args = append(args, "-h", "*", "-p", strconv.Itoa(options.InsecureGlobalPort))
 		}
+	}
+	if options.SharedBuffers != 0 {
+		args = append(args, "-c", fmt.Sprintf("shared_buffers=%dB", options.SharedBuffers))
 	}
 	proc := commandPassOutput(options.Logger, postgresPath, args...)
 	err = proc.Start()

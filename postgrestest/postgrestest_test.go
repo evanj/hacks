@@ -227,3 +227,28 @@ func TestNewInstanceWithOptionsError(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+func TestNewInstanceWithOptionsSharedBuffers(t *testing.T) {
+	instance, err := NewInstanceWithOptions(Options{SharedBuffers: 256 << 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer instance.Close()
+
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, instance.URL())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// ensure the server's character encoding is UTF-8
+	var sharedBuffers string
+	err = conn.QueryRow(ctx, `SHOW shared_buffers`).Scan(&sharedBuffers)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sharedBuffers != "256MB" {
+		t.Errorf("expected shared_buffers=256MB; was %s", sharedBuffers)
+	}
+
+}
