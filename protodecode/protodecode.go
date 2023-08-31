@@ -13,10 +13,12 @@ import (
 
 	"github.com/richardartoul/molecule"
 	"github.com/richardartoul/molecule/src/codec"
+	"google.golang.org/protobuf/encoding/protowire"
 )
 
 func main() {
-	nestedPaths := flag.String("nested", "", "a , separated list of tag paths for nested messages e.g. '1,2.3'")
+	nestedPaths := flag.String("nested", "", "a comma (,) separated list of tag paths for nested messages e.g. '1,2.3'")
+	tagsOnly := flag.Bool("tagsOnly", false, "if true, will only decode tags (field number, wire type) at each byte offset; useful for finding the start of a message")
 	flag.Parse()
 	if flag.NArg() != 1 {
 		fmt.Fprintln(os.Stderr, "Usage: protodecode (path)")
@@ -34,7 +36,11 @@ func main() {
 		panic(err)
 	}
 
-	err = decode(os.Stdout, protoBytes, nestedSet)
+	if *tagsOnly {
+		err = decodeTags(protoBytes)
+	} else {
+		err = decode(os.Stdout, protoBytes, nestedSet)
+	}
 	if err != nil {
 		panic(err)
 	}
@@ -187,6 +193,45 @@ func decodeRecursive(w io.Writer, buf []byte, nested nestedPathsSet, offset int,
 	})
 	if err != nil {
 		return fmt.Errorf("decode failed at offset %d: %w", len(buf)-cb.Len()+offset, err)
+	}
+	return nil
+}
+
+func decodeTags(buf []byte) error {
+	// try decoding at every byte offset
+	for i := 0; i < len(buf); i++ {
+		cb := codec.NewBuffer(buf[i:])
+		v, err := cb.DecodeVarint()
+		if err != nil {
+			panic("varint decoding failed: " + err.Error())
+		}
+
+		// TODO: check the error? We expect errors, so the only thing we could do is log it
+		// for now, we ignore the error
+		fieldNum, wireType, _ := codec.AsTagAndWireType(v)
+		encodedVarint := protowire.AppendVarint(nil, v)
+		fmt.Printf("offset %d: 0x%s varint=%d; field num=%d; wire type=%d %s",
+			len(buf)-cb.Len()-len(encodedVarint), hex.EncodeToString(encodedVarint),
+			v, fieldNum, wireType, wireTypes[wireType])
+
+		// if this looks like a valid start of a protocol buffer message, start decoding here
+		invalid := false
+		if fieldNum <= 0 {
+			invalid = true
+			fmt.Printf(" invalid: field num must be > 0")
+		}
+		if wireTypes[wireType] == "" {
+			invalid = true
+			fmt.Printf(" invalid: unknown wire type")
+		} else if wireType == codec.WireStartGroup || wireType == codec.WireEndGroup {
+			invalid = true
+			fmt.Printf(" invalid: group wire types are deprecated")
+		}
+		if !invalid {
+			fmt.Printf(" VALID!\n")
+		} else {
+			fmt.Println()
+		}
 	}
 	return nil
 }
