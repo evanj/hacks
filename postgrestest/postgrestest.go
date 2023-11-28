@@ -44,16 +44,23 @@ const defaultPort = 5432
 type Options struct {
 	// If true, Postgres will listen on localhost for network connections.
 	ListenOnLocalhost bool
+
 	// If not nil, verbose information will be logged.
 	Logger *slog.Logger
+
 	// If not 0, listen globally on InsecureGlobalPort. This is insecure because it will allow
 	// connections from any IP address, although it will require a password. The default Postgres
 	// port is 5432. InsecureGlobalPort cannot be set together with ListenOnLocalhost, since this
 	// overrides ListenOnLocalhost, so just set this option.
 	InsecureGlobalPort int
+
 	// Set Postgres's shared_buffers for the buffer pool cache in bytes. See:
 	// https://www.postgresql.org/docs/current/runtime-config-resource.html
 	SharedBuffers int
+
+	// Create or use Postgres in this directory. If empty, it will create a temporary directory
+	// that will be deleted when done. If this is set, the directory will not be deleted.
+	DirPath string
 }
 
 // New creates a new Postgres instance and returns a connection string URL in the

@@ -16,7 +16,7 @@ import (
 
 const psqlBinName = "psql"
 
-func startPostgresAndPSQL(listenOnLocalhost bool, verbose bool, insecureGlobalPort int) {
+func startPostgresAndPSQL(listenOnLocalhost bool, verbose bool, insecureGlobalPort int, dir string) {
 	logger := nilslog.New()
 	if verbose {
 		logger = slog.Default()
@@ -26,6 +26,7 @@ func startPostgresAndPSQL(listenOnLocalhost bool, verbose bool, insecureGlobalPo
 		ListenOnLocalhost:  listenOnLocalhost,
 		Logger:             logger,
 		InsecureGlobalPort: insecureGlobalPort,
+		DirPath:            dir,
 	}
 	instance, err := postgrestest.NewInstanceWithOptions(options)
 	if err != nil {
@@ -69,7 +70,8 @@ func main() {
 	listenOnLocalhost := flag.Bool("listenOnLocalhost", false, "Listens on localhost if set")
 	insecureGlobalPort := flag.Int("insecureGlobalPort", 0, "If set, listens for global TCP connections")
 	verbose := flag.Bool("verbose", false, "Logs verbose commands if set")
+	dir := flag.String("dir", "", "If not empty, use and/or create DB in this dir (for reusing directory)")
 	flag.Parse()
 
-	startPostgresAndPSQL(*listenOnLocalhost, *verbose, *insecureGlobalPort)
+	startPostgresAndPSQL(*listenOnLocalhost, *verbose, *insecureGlobalPort, *dir)
 }

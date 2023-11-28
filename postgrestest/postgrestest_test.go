@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
@@ -241,7 +242,7 @@ func TestNewInstanceWithOptionsSharedBuffers(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// ensure the server's character encoding is UTF-8
+	// ensure the shared_buffers were set from the option
 	var sharedBuffers string
 	err = conn.QueryRow(ctx, `SHOW shared_buffers`).Scan(&sharedBuffers)
 	if err != nil {
@@ -250,5 +251,44 @@ func TestNewInstanceWithOptionsSharedBuffers(t *testing.T) {
 	if sharedBuffers != "256MB" {
 		t.Errorf("expected shared_buffers=256MB; was %s", sharedBuffers)
 	}
+}
+
+func TestNewInstanceWithOptionsDirPath(t *testing.T) {
+	tempDir := t.TempDir()
+	pgDirPath := filepath.Join(tempDir, "pg_dir")
+
+	options := Options{DirPath: pgDirPath}
+	instance, err := NewInstanceWithOptions(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer instance.Close()
+
+	// create a table in this instance
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, instance.URL())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	_, err = conn.Exec(ctx, `CREATE TABLE example (column_name TEXT)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = conn.Close(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = instance.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// reuse the directory: table must exist
+	instance2, err := NewInstanceWithOptions(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer instance2.Close()
 
 }
