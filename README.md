@@ -2,6 +2,15 @@
 
 I often write little throwaway tools when I am working. Occasionally, I write the same tool more than once, at which point I try to turn it into a more serious thing. This is my collection of them. These are for me, but I'm making this public and open source in case they are helpful to others.
 
+## Upgrading everything to the latest version
+
+* `go get -u -v ./...`
+* Edit `getprotoc/getprotoc.go` with the latest protoc version number.
+* Run `go run ./getprotoc --computeHashes` and copy/paste.
+* Edit `runtypescript/runtypescript.go` with the latest node LTS version number.
+* Run `go run ./runtypescript --computeHashes` and copy/paste.
+* Edit `Dockerfile-testing` with the latest Go/Debian release image name
+
 
 ## timeparse: parse a time into local, UTC, and unix times
 
