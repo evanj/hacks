@@ -2,7 +2,9 @@ package pgxtxn
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/evanj/hacks/postgrestest"
@@ -136,5 +138,86 @@ func TestRetrySerializationFailure(t *testing.T) {
 
 	if count != 2 {
 		t.Errorf("expected transaction to be retried once; count=%d", count)
+	}
+}
+
+func TestExplicitRollbackCommit(t *testing.T) {
+	pgURL := postgrestest.New(t)
+	pgPool, err := pgxpool.New(context.Background(), pgURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// explicitly rolling back the transaction when returning nil is permitted
+	txn := func(ctx context.Context, tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `CREATE TABLE example (value INTEGER)`)
+		if err != nil {
+			return err
+		}
+
+		// explicitly rollback the transaction
+		err = tx.Rollback(ctx)
+		if err != nil {
+			return fmt.Errorf("explicit rollback failed: %w", err)
+		}
+		return nil
+	}
+	ctx := context.Background()
+	err = Run(ctx, pgPool, txn, pgx.TxOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// explicitly rolling back the transaction when returning an error nil is also permitted
+	exampleError := errors.New("example error")
+	txn = func(ctx context.Context, tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `CREATE TABLE example (value INTEGER)`)
+		if err != nil {
+			return err
+		}
+
+		// explicitly rollback the transaction
+		err = tx.Rollback(ctx)
+		if err != nil {
+			return fmt.Errorf("explicit rollback failed: %w", err)
+		}
+		return exampleError
+	}
+	err = Run(ctx, pgPool, txn, pgx.TxOptions{})
+	if err != exampleError {
+		t.Fatal(err)
+	}
+
+	// the transaction must have been rolled back
+	var count int
+	err = pgPool.QueryRow(ctx, `SELECT COUNT(*) FROM example`).Scan(&count)
+	if err == nil || !strings.Contains(err.Error(), "does not exist") {
+		t.Fatal(err)
+	}
+
+	// explicitly committing the transaction is also not an error, although I wish it was
+	txn = func(ctx context.Context, tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `CREATE TABLE example (value INTEGER)`)
+		if err != nil {
+			return err
+		}
+		err = tx.Commit(ctx)
+		if err != nil {
+			return fmt.Errorf("explicit commit failed: %w", err)
+		}
+		return nil
+	}
+	err = Run(ctx, pgPool, txn, pgx.TxOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// the transaction must have been rolled back
+	err = pgPool.QueryRow(ctx, `SELECT COUNT(*) FROM example`).Scan(&count)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Errorf("expected count=0, got %d", count)
 	}
 }

@@ -4,7 +4,6 @@ package pgxtxn
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -27,11 +26,15 @@ type TransactionalDB interface {
 	BeginTx(ctx context.Context, txOptions pgx.TxOptions) (pgx.Tx, error)
 }
 
-// Run executes body in a transaction without the possibility of forgetting to commit or roll back,
+// Run executes body in a transaction that will always commit or roll back,
 // and with retries in case of deadlocks or serialization errors. If body returns an error, the
 // transaction is rolled back. If it returns nil, the transaction is committed. The body function
-// must not call Commit, but may call Rollback. The ctx argument is passed to Begin, Commit,
+// should not call Commit, but may call Rollback. The ctx argument is passed to Begin, Commit,
 // Rollback and body without modification.
+//
+// This prevents the following common mistakes:
+// - Forgetting to COMMIT or ROLLBACK in all cases, leaving "stuck" transactions
+// - Forgetting to retry on serialization errors
 //
 // TODO: Pass an interface that does not have Commit to body to avoid mistakes?
 func Run(
@@ -46,9 +49,15 @@ func Run(
 		}
 		err = body(ctx, tx)
 		if err != nil {
+			// ErrTxClosed happens if the transaction is already committed/rolled back explicitly
+			// but log any other errors (they should not happen)
 			err2 := tx.Rollback(ctx)
-			if err2 != nil {
-				return fmt.Errorf("%w; pgtxn.Run: rollback failed: %w", err, err2)
+			if err2 != nil && err2 != pgx.ErrTxClosed {
+				slog.LogAttrs(ctx, slog.LevelWarn, "pgtxn.Run: unexpected error when rolling back transaction while handling error",
+					slog.Int("attempt", i+1),
+					slog.String("rollback_error", err2.Error()),
+					slog.String("body_error", err.Error()),
+				)
 			}
 			var pgErr *pgconn.PgError
 			if errors.As(err, &pgErr) &&
@@ -63,7 +72,13 @@ func Run(
 			}
 			return err
 		}
-		return tx.Commit(ctx)
+
+		err = tx.Commit(ctx)
+		if err != nil && errors.Is(err, pgx.ErrTxClosed) {
+			// this transaction was committed or rolled back explicitly: not an error
+			err = nil
+		}
+		return err
 	}
 	panic("BUG: should not be possible")
 }
