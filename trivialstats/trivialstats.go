@@ -133,9 +133,13 @@ func (d *Distribution) Stats() DistributionStats {
 		float64(total) / float64(len(allValues)),
 		int64(len(allValues)),
 
+		allValues[int(float64(len(allValues))*0.01)],
+		allValues[int(float64(len(allValues))*0.25)],
 		allValues[int(float64(len(allValues))*0.5)],
+		allValues[int(float64(len(allValues))*0.75)],
 		allValues[int(float64(len(allValues))*0.9)],
 		allValues[int(float64(len(allValues))*0.95)],
+		allValues[int(float64(len(allValues))*0.99)],
 	}
 }
 
@@ -145,13 +149,17 @@ type DistributionStats struct {
 	Avg   float64
 	Count int64
 
+	P1  int64
+	P25 int64
 	P50 int64
+	P75 int64
 	P90 int64
 	P95 int64
+	P99 int64
 }
 
 func (d DistributionStats) String() string {
-	return fmt.Sprintf("count=%d avg=%.1f min=%d p50=%d p90=%d p95=%d max=%d",
-		d.Count, d.Avg, d.Min, d.P50, d.P90, d.P95, d.Max,
+	return fmt.Sprintf("count=%d avg=%.1f min=%d p1=%d p25=%d p50=%d p75=%d p90=%d p95=%d p99=%d max=%d",
+		d.Count, d.Avg, d.Min, d.P1, d.P25, d.P50, d.P75, d.P90, d.P95, d.P99, d.Max,
 	)
 }

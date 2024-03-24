@@ -182,7 +182,11 @@ func TestDistribution(t *testing.T) {
 		4.5,
 		10,
 
+		0,
+		2,
 		5,
+		7,
+		9,
 		9,
 		9,
 	}
@@ -198,8 +202,12 @@ func TestDistribution(t *testing.T) {
 		5.0,
 		11,
 
+		0,
+		2,
 		5,
+		8,
 		9,
+		10,
 		10,
 	}
 	if expected != stats {
