@@ -21,9 +21,7 @@ func main() {
 	slog.Info("dialing with insecure credentials ...", "address", address)
 
 	ctx := context.Background()
-	client, err := grpc.DialContext(ctx, address,
-		grpc.WithBlock(),
-		grpc.WithTransportCredentials(insecure.NewCredentials()))
+	client, err := grpc.NewClient(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		panic(err)
 	}
