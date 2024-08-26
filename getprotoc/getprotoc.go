@@ -13,7 +13,7 @@ import (
 	"github.com/evanj/hacks/dltools"
 )
 
-const version = "27.0"
+const version = "27.3"
 
 const protocURLTemplate = "https://github.com/protocolbuffers/protobuf/releases/download/v{{.Version}}/protoc-{{.Version}}-{{.OS}}-{{.Arch}}.zip"
 const protocZipPath = "bin/protoc"
@@ -30,9 +30,10 @@ var goarchToProtocArch = map[string]string{
 
 // computed with sha256
 var protocHashes = map[dltools.Platform]string{
-	{GOOS: "darwin", GOARCH: "amd64"}: "d956cf3a9e91a687aa4d1026e9261e5a587e4e0b545db0174509f6c448b8ce21",
-	{GOOS: "darwin", GOARCH: "arm64"}: "2cf59e3e3463bede1f10b7517efdddd97a3bd8cfd9cacc286407b657290dc781",
-	{GOOS: "linux", GOARCH: "amd64"}:  "e2bdce49564dbad4676023d174d9cdcf932238bc0b56a8349a5cb27bbafc26b0",
+	{GOOS: "darwin", GOARCH: "amd64"}: "ce282648fed0e7fbd6237d606dc9ec168dd2c1863889b04efa0b19c47da65d1b",
+	{GOOS: "darwin", GOARCH: "arm64"}: "b22116bd97cdbd7ea25346abe635a9df268515fe5ef5afa93cd9a68fc2513f84",
+	{GOOS: "linux", GOARCH: "amd64"}:  "6dab2adab83f915126cab53540d48957c40e9e9023969c3e84d44bfb936c7741",
+	{GOOS: "linux", GOARCH: "arm64"}:  "bdad36f3ad7472281d90568c4956ea2e203c216e0de005c6bd486f1920f2751c",
 }
 
 func shouldExtract(name string) bool {
