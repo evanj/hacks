@@ -96,6 +96,7 @@ func (a *AverageMinMax) Record(value int64) {
 
 // Distribution records all samples to provide exact percentiles.
 // More serious applications should use https://github.com/DataDog/sketches-go.
+// Not thread-safe.
 type Distribution struct {
 	// records samples in separate chunks to limit the "worst case" delay in Add()
 	sampleChunks [][]int64
@@ -112,6 +113,20 @@ func (d *Distribution) Add(sample int64) {
 		d.sampleChunks = append(d.sampleChunks, last)
 	}
 	d.sampleChunks[len(d.sampleChunks)-1] = append(last, sample)
+}
+
+// Merge combines values from other into this Distribution. Other is unmodified.
+func (d *Distribution) Merge(other *Distribution) {
+	// we share "full" chunks, but need to merge the "last" chunk
+	merged := make([][]int64, 0, len(d.sampleChunks)+len(other.sampleChunks))
+	merged = append(merged, other.sampleChunks[:len(other.sampleChunks)-1]...)
+	merged = append(merged, d.sampleChunks...)
+	d.sampleChunks = merged
+
+	lastOtherChunk := other.sampleChunks[len(other.sampleChunks)-1]
+	for _, value := range lastOtherChunk {
+		d.Add(value)
+	}
 }
 
 func (d *Distribution) Stats() DistributionStats {

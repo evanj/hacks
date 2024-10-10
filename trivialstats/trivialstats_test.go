@@ -213,4 +213,40 @@ func TestDistribution(t *testing.T) {
 	if expected != stats {
 		t.Errorf("expected=%#v != stats=%#v", expected, stats)
 	}
+
+	empty := NewDistribution()
+	d.Merge(empty)
+	if d.Stats().Avg != 5.0 {
+		t.Errorf("d.Stats().Avg=%f expected 5.0: Merge(empty) should not change anything",
+			d.Stats().Avg)
+	}
+
+	other := NewDistribution()
+	other.Add(20)
+	d.Merge(other)
+	if d.Stats().Avg != 6.25 {
+		t.Errorf("d.Stats().Avg=%f expected 6.25: Merge(empty) should not change anything",
+			d.Stats().Avg)
+	}
+
+	if other.Stats().Count != 1 {
+		t.Errorf("other.Stats().Count=%d expected 1; other should not be modified by Merge",
+			other.Stats().Count)
+	}
+	other.Add(50)
+	if d.Stats().Count != 12 {
+		t.Errorf("d.Stats().Count=%d expected 12; d should not be modified by Merge",
+			d.Stats().Count)
+	}
+
+	for i := 0; i < distributionChunkSize; i++ {
+		other.Add(int64(i))
+	}
+	dBefore := d.Stats().Count
+	otherBefore := other.Stats().Count
+	d.Merge(other)
+	if d.Stats().Count != dBefore+otherBefore {
+		t.Errorf("d.Stats().Count=%d expected %d; Merge should merge all records",
+			d.Stats().Count, dBefore+otherBefore)
+	}
 }
