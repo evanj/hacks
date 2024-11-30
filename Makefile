@@ -26,7 +26,7 @@ all: protodecode/protodemo/demo.pb.go $(NODE_DIR)
 	go run ./runtypescript --nodeDir=$(NODE_DIR) -- --version
 
 	# ensure locale works in a minimal Linux container
-	docker build --progress=plain -f Dockerfile-testing .
+	docker buildx build --progress=plain -f Dockerfile-testing .
 	echo "SUCCESS"
 
 $(NODE_DIR): runtypescript/runtypescript.go | $(BUILD_DIR)
