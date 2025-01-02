@@ -49,9 +49,9 @@ type Options struct {
 	Logger *slog.Logger
 
 	// If not 0, listen globally on InsecureGlobalPort. This is insecure because it will allow
-	// connections from any IP address, although it will require a password. The default Postgres
-	// port is 5432. InsecureGlobalPort cannot be set together with ListenOnLocalhost, since this
-	// overrides ListenOnLocalhost, so just set this option.
+	// connections from any IP address, although it generates and requires a password. The default
+	// Postgres port is 5432. When setting InsecureGlobalPort, leave ListenOnLocalhost=false: this
+	// option will listen on localhost addresses as well.
 	InsecureGlobalPort int
 
 	// Set Postgres's shared_buffers for the buffer pool cache in bytes. See:
@@ -350,15 +350,16 @@ func (i *Instance) port() int {
 	return defaultPort
 }
 
-// LocalhostURL returns the Postgres connection URL using a localhost TCP socket. This will only
+// LocalhostURL returns the Postgres connection URL using a localhost IP address. This will only
 // work if using Options.ListenOnLocalhost=true. Most callers should use URL() instead.
 func (i *Instance) LocalhostURL() string {
 	// https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
 	return fmt.Sprintf("postgresql://127.0.0.1:%d/postgres", i.port())
 }
 
-// RemoteURL returns the firs Postgres connection URL using a localhost TCP socket. This will only
-// work if using Options.ListenOnLocalhost=true. Most callers should use URL() instead.
+// RemoteURL returns the first Postgres connection URL using an IP address that is not localhost.
+// This will only work if using Options.InsecureGlobalPort is set. Most callers should use URL()
+// instead.
 func (i *Instance) RemoteURL() string {
 	addresses, err := net.InterfaceAddrs()
 	if err != nil {
