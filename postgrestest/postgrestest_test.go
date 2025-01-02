@@ -3,6 +3,7 @@ package postgrestest
 import (
 	"context"
 	"errors"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -179,29 +180,40 @@ func TestNewInstanceWithGlobalOption(t *testing.T) {
 	}
 
 	// might be able to connect on other addresses (depends on firewalls)
+	// ignore DeadlineExceeded, ECONNRESET, unexpected EOF: assuming they are firewall errors
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
 		t.Fatal(err)
 	}
+	successCount := 0
 	for _, addr := range addrs {
 		ipNetAddr := addr.(*net.IPNet)
 		if ipNetAddr.IP.IsGlobalUnicast() || ipNetAddr.IP.IsLoopback() {
 			pgURL := instance.RemoteURLForAddress(ipNetAddr.IP.String())
 
-			t.Log(pgURL)
+			t.Logf("connecting to pgURL=%s ...", pgURL)
 			ctxWithTimeout, cancel := context.WithTimeout(context.Background(), connectTimeout)
 			conn, err := pgx.Connect(ctxWithTimeout, pgURL)
 			cancel()
-			if !(err == nil || errors.Is(err, context.DeadlineExceeded)) {
-				t.Errorf("addr=%s ; pgURL=%s: expected success, was: %s", addr, pgURL, err)
+			if err != nil {
+				if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, syscall.ECONNRESET) || errors.Is(err, io.ErrUnexpectedEOF) {
+					t.Logf("ignoring error for pgURL=%s assuming due to firewall: %s", pgURL, err)
+				} else {
+					t.Errorf("addr=%s ; pgURL=%s: expected success, was: %s", addr, pgURL, err)
+					// t.Logf("WTF", errors.Is())
+				}
 			}
 			if conn != nil {
 				err = conn.Close(context.Background())
 				if err != nil {
 					t.Fatal(err)
 				}
+				successCount += 1
 			}
 		}
+	}
+	if successCount == 0 {
+		t.Error("expected at least one successful connection")
 	}
 }
 
