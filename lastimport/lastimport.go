@@ -24,7 +24,7 @@ func checkGitGrep(importPath string) error {
 		return err
 	}
 
-	return fmt.Errorf("found imports:\n" + string(out))
+	return fmt.Errorf("found imports:\n%s", string(out))
 }
 
 func mostRecentImport(importPath string) (string, error) {
