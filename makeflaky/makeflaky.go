@@ -59,7 +59,7 @@ func runLoop(ctx context.Context, pid int, runPeriod time.Duration, stopPeriod t
 			if isNoSuchProcess(err) {
 				break
 			}
-			panic(err)
+			return err
 		}
 		// make sure we always call SIGCONT, even if CTRL-C is pressed
 		err = sleepOrSigintOrCancel(stopPeriod)
@@ -70,16 +70,13 @@ func runLoop(ctx context.Context, pid int, runPeriod time.Duration, stopPeriod t
 			}
 		}
 		if err2 != nil {
+			// kill(SIGCONT) can return "no such process": process has exited so quit loop
+			if isNoSuchProcess(err2) {
+				break
+			}
 			return err2
 		}
 
-		err = unix.Kill(pid, unix.SIGCONT)
-		if err != nil {
-			if isNoSuchProcess(err) {
-				break
-			}
-			panic(err)
-		}
 		err = sleepOrSigintOrCancel(runPeriod)
 		if err != nil {
 			if err == context.Canceled {
@@ -160,7 +157,7 @@ func maybeExecAndRun(execFlag bool, runPeriod time.Duration, stopPeriod time.Dur
 		if err == errSigint {
 			log.Printf("caught SIGINT (CTRL-C)")
 		} else {
-			panic(fmt.Sprintf("BUG: unexpected err=%#v", err))
+			panic(fmt.Sprintf("BUG: unexpected err=%#v %T %s", err, err, err.Error()))
 		}
 	}
 
