@@ -1,11 +1,37 @@
 package main
 
 import (
+	"flag"
 	"fmt"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
 )
+
+const runMainEnvVar = "RUN_TIMEPARSE_MAIN"
+
+func TestMainOutput(t *testing.T) {
+	if os.Getenv(runMainEnvVar) == "1" {
+		os.Args = []string{"timeparse", "1774345980000"}
+		flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+		main()
+		return
+	}
+
+	cmd := exec.Command(os.Args[0], "-test.run=TestMainOutput")
+	cmd.Env = append(os.Environ(), runMainEnvVar+"=1")
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("running main failed: %v", err)
+	}
+	want := "UTC: 2026-03-24T09:53:00Z  UNIX EPOCH: 1774345980"
+	outString := string(out)
+	if !strings.Contains(outString, want) {
+		t.Errorf("output = %q; want it to contain %q", outString, want)
+	}
+}
 
 func TestTryParse(t *testing.T) {
 	nycTZ, err := time.LoadLocation("America/New_York")
