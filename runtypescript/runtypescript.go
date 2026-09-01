@@ -15,7 +15,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-const nodeVersion = "20.11.1"
+const nodeVersion = "24.20.0"
 const nodeURLTemplate = "https://nodejs.org/dist/v{{.Version}}/node-v{{.Version}}-{{.OS}}-{{.Arch}}.tar.xz"
 
 var goarchToNode = map[string]string{
@@ -25,9 +25,9 @@ var goarchToNode = map[string]string{
 
 // computed with sha256
 var nodeHashes = map[dltools.Platform]string{
-	{GOOS: "darwin", GOARCH: "amd64"}: "ed69f1f300beb75fb4cad45d96aacd141c3ddca03b6d77c76b42cb258202363d",
-	{GOOS: "darwin", GOARCH: "arm64"}: "fd771bf3881733bfc0622128918ae6baf2ed1178146538a53c30ac2f7006af5b",
-	{GOOS: "linux", GOARCH: "amd64"}:  "d8dab549b09672b03356aa2257699f3de3b58c96e74eb26a8b495fbdc9cf6fbe",
+	{GOOS: "darwin", GOARCH: "amd64"}: "26fc30891004603d094eed11de5efcd03bbd2efbc35c177fc72648d5d7a7701b",
+	{GOOS: "darwin", GOARCH: "arm64"}: "b7bf7707070b950ba1ec5f1af3bb6de0f2b1962c5033973d94068ab021ef3014",
+	{GOOS: "linux", GOARCH: "amd64"}:  "2f2c0da162318f0de47665410c7c8c2ed3d36c8f3105de4bbc61176c70a7cbf2",
 }
 
 func installTypescript(fetcher *dltools.PackageFetcher, nodeDir string, logf dltools.LogFunc) error {
