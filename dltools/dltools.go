@@ -87,10 +87,10 @@ func downloadUnverified(url string) ([]byte, error) {
 }
 
 // LogFunc defines a function for verbose logging.
-type LogFunc func(message string, args ...interface{})
+type LogFunc func(message string, args ...any)
 
 // NilLogFunc does not log anything.
-func NilLogFunc(message string, args ...interface{}) {}
+func NilLogFunc(message string, args ...any) {}
 
 // ExtractTar extracts a tar file from r into destinationDir.
 func ExtractTar(r io.Reader, destinationDir string, logf LogFunc) error {

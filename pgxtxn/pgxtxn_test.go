@@ -77,7 +77,7 @@ func TestRetryDeadlock(t *testing.T) {
 	}()
 
 	const numGoroutines = 2
-	for i := 0; i < numGoroutines; i++ {
+	for range numGoroutines {
 		err = <-errs
 		if err != nil {
 			t.Fatal(err)

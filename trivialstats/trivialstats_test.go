@@ -74,7 +74,7 @@ func TestAverageMinMaxValues(t *testing.T) {
 func TestAverageMinMaxSumOverflow(t *testing.T) {
 	// add MaxInt64 3 times: this will wrap around to a positive value but will have overflowed
 	s := NewAverageMinMax()
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		s.Record(math.MaxInt64)
 	}
 	mustPanic(t, "sum overflowed;", func() { s.Sum() })
@@ -87,7 +87,7 @@ func TestAverageMinMaxSumOverflow(t *testing.T) {
 
 	// negative version: add minimum 2; will wrap to 0
 	s = NewAverageMinMax()
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		s.Record(math.MinInt64)
 	}
 	mustPanic(t, "sum overflowed;", func() { s.Sum() })
@@ -172,7 +172,7 @@ func TestAddOverflow(t *testing.T) {
 
 func TestDistribution(t *testing.T) {
 	d := NewDistribution()
-	for i := int64(0); i < 10; i++ {
+	for i := range int64(10) {
 		d.Add(i)
 	}
 	stats := d.Stats()
@@ -239,7 +239,7 @@ func TestDistribution(t *testing.T) {
 			d.Stats().Count)
 	}
 
-	for i := 0; i < distributionChunkSize; i++ {
+	for i := range distributionChunkSize {
 		other.Add(int64(i))
 	}
 	dBefore := d.Stats().Count

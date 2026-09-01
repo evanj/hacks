@@ -3,10 +3,9 @@ package nilslog
 import (
 	"bytes"
 	"context"
+	"log/slog"
 	"strings"
 	"testing"
-
-	"golang.org/x/exp/slog"
 )
 
 func TestNil(t *testing.T) {

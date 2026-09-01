@@ -83,7 +83,7 @@ func BenchmarkBitSet(b *testing.B) {
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
 				set := newBitSet(bitSetSize)
-				for j := 0; j < numToSet; j++ {
+				for range numToSet {
 					index := rng.Intn(numToSet)
 					set.add(index)
 				}
@@ -99,7 +99,7 @@ func BenchmarkBitSet(b *testing.B) {
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
 				set := newBitSet(bitSetSize)
-				for j := 0; j < numToSet; j++ {
+				for range numToSet {
 					index := rng.Intn(numToSet)
 					set.add(index)
 				}
@@ -116,7 +116,7 @@ func BenchmarkBitSet(b *testing.B) {
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
 				set := bitsandblooms.New(bitSetSize)
-				for j := 0; j < numToSet; j++ {
+				for range numToSet {
 					index := rng.Intn(numToSet)
 					set.Set(uint(index))
 				}
@@ -131,7 +131,7 @@ func BenchmarkBitSet(b *testing.B) {
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
 				set := roaring64.New()
-				for j := 0; j < numToSet; j++ {
+				for range numToSet {
 					index := rng.Intn(numToSet)
 					set.Add(uint64(index))
 				}
@@ -165,7 +165,7 @@ func uintIndexesShift(index int) (int, int) {
 }
 
 func TestUintIndexes(t *testing.T) {
-	for index := 0; index < 100; index++ {
+	for index := range 100 {
 		uint1, bit1 := uintIndexesDiv(index)
 		uint2, bit2 := uintIndexesShift(index)
 		if !(uint1 == uint2 && bit1 == bit2) {
@@ -190,7 +190,7 @@ func BenchmarkUintIndexes(b *testing.B) {
 
 	b.Run("div", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			for index := 0; index < bitIndexes; index++ {
+			for index := range bitIndexes {
 				u, b := uintIndexesDiv(index)
 				bit := int(uints[u] & (1 << b))
 				doNotOptimizeTotal += bit
@@ -200,7 +200,7 @@ func BenchmarkUintIndexes(b *testing.B) {
 
 	b.Run("shift", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			for index := 0; index < bitIndexes; index++ {
+			for index := range bitIndexes {
 				u, b := uintIndexesShift(index)
 				bit := int(uints[u] & (1 << b))
 				doNotOptimizeTotal += bit

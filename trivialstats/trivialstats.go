@@ -6,8 +6,7 @@ package trivialstats
 import (
 	"fmt"
 	"math"
-
-	"golang.org/x/exp/slices"
+	"slices"
 )
 
 // a 4 kiB page in case that helps memory allocation somehow

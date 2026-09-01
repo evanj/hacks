@@ -4,10 +4,10 @@ package pgxtxn
 import (
 	"context"
 	"errors"
+	"log/slog"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"golang.org/x/exp/slog"
 )
 
 const maxRetries = 3
@@ -42,7 +42,7 @@ func Run(
 	txOptions pgx.TxOptions,
 ) error {
 
-	for i := 0; i < maxRetries; i++ {
+	for i := range maxRetries {
 		tx, err := db.BeginTx(ctx, txOptions)
 		if err != nil {
 			return err

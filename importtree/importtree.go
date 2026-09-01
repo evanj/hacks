@@ -84,7 +84,7 @@ const baseIndent = "  "
 func makeIndent(level int) string {
 	var output strings.Builder
 	output.Grow(level * len(baseIndent))
-	for i := 0; i < level; i++ {
+	for range level {
 		output.WriteString(baseIndent)
 	}
 	return output.String()

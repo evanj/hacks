@@ -3,8 +3,7 @@ package nilslog
 
 import (
 	"context"
-
-	"golang.org/x/exp/slog"
+	"log/slog"
 )
 
 type nilSlogHandler struct{}

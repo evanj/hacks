@@ -64,7 +64,7 @@ func printableUTF8(b []byte) string {
 		r, n := utf8.DecodeRune(b)
 		if r == utf8.RuneError || unicode.IsControl(r) || unicode.Is(unicode.C, r) {
 			// non-printable Unicode characters
-			for i := 0; i < n; i++ {
+			for range n {
 				output.WriteByte(replacementChar)
 			}
 		} else {
@@ -83,8 +83,8 @@ func parseNested(specification string) (nestedPathsSet, error) {
 	}
 
 	set := nestedPathsSet{}
-	paths := strings.Split(specification, ",")
-	for _, path := range paths {
+	paths := strings.SplitSeq(specification, ",")
+	for path := range paths {
 		// validate that path is a sequence of . separated integers
 		parts := strings.Split(path, ".")
 		for i, part := range parts {
@@ -128,9 +128,9 @@ func decodeRecursive(w io.Writer, buf []byte, nested nestedPathsSet, offset int,
 	if path != "" {
 		depth = 1 + strings.Count(path, ".")
 	}
-	depthPrefix := ""
+	var depthPrefix strings.Builder
 	for i := 0; i < depth; i++ {
-		depthPrefix += "  "
+		depthPrefix.WriteString("  ")
 	}
 
 	cb := codec.NewBuffer(buf)
@@ -138,7 +138,7 @@ func decodeRecursive(w io.Writer, buf []byte, nested nestedPathsSet, offset int,
 	err := molecule.MessageEach(cb, func(fieldNum int32, value molecule.Value) (bool, error) {
 		nextOffset := len(buf) - cb.Len()
 		fmt.Fprintf(w, "%sbytes %d-%d: field=%d type=%d (%s)",
-			depthPrefix, lastOffset+offset, nextOffset+offset, fieldNum,
+			depthPrefix.String(), lastOffset+offset, nextOffset+offset, fieldNum,
 			value.WireType, wireTypes[value.WireType])
 
 		decodeNested := false
@@ -199,7 +199,7 @@ func decodeRecursive(w io.Writer, buf []byte, nested nestedPathsSet, offset int,
 
 func decodeTags(buf []byte) error {
 	// try decoding at every byte offset
-	for i := 0; i < len(buf); i++ {
+	for i := range buf {
 		cb := codec.NewBuffer(buf[i:])
 		v, err := cb.DecodeVarint()
 		if err != nil {

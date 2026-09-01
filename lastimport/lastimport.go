@@ -14,8 +14,7 @@ func checkGitGrep(importPath string) error {
 	proc := exec.Command("git", "grep", `"`+importPath+`"`, "--", "*.go")
 	out, err := proc.CombinedOutput()
 	if err != nil {
-		var exitStatus *exec.ExitError
-		if errors.As(err, &exitStatus) {
+		if exitStatus, ok := errors.AsType[*exec.ExitError](err); ok {
 			if exitStatus.ExitCode() == 1 && len(exitStatus.Stderr) == 0 {
 				// no results found! this is "success"
 				return nil

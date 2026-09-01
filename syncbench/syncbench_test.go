@@ -152,14 +152,14 @@ func TestSyncPublish(t *testing.T) {
 			// create the object and have 10 threads all get the value
 			publisher := impl.newFn(generator)
 			values := make(chan string, numGoroutines)
-			for i := 0; i < numGoroutines; i++ {
+			for range numGoroutines {
 				go func() {
 					values <- publisher.waitForValue()
 				}()
 			}
 			close(unblockPublisher)
 
-			for i := 0; i < numGoroutines; i++ {
+			for range numGoroutines {
 				v := <-values
 				if v != expectedValue {
 					t.Errorf("v=%#v expected %#v", v, expectedValue)

@@ -17,8 +17,7 @@ import (
 )
 
 func isNoSuchProcess(err error) bool {
-	var errno syscall.Errno
-	if errors.As(err, &errno) {
+	if errno, ok := errors.AsType[syscall.Errno](err); ok {
 		return errno == unix.ESRCH
 	}
 	return false
@@ -98,8 +97,7 @@ func exitCode(err error) int {
 		return 0
 	}
 
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
+	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 		return exitErr.ExitCode()
 	}
 

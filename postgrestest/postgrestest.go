@@ -22,10 +22,11 @@ import (
 	"testing"
 	"time"
 
+	"log/slog"
+	"slices"
+
 	"github.com/evanj/hacks/nilslog"
 	"github.com/jackc/pgx/v5"
-	"golang.org/x/exp/slices"
-	"golang.org/x/exp/slog"
 )
 
 // the port number must be appended to complete this
@@ -212,7 +213,7 @@ func NewInstanceWithOptions(options Options) (*Instance, error) {
 	const maxPolls = 40
 	const pollSleep = 10 * time.Millisecond
 	started := false
-	for i := 0; i < maxPolls; i++ {
+	for range maxPolls {
 		time.Sleep(pollSleep)
 
 		_, err = os.Stat(instance.socketPath())
@@ -421,7 +422,7 @@ func connectUntilReady(unixSocketPath string) error {
 	// connect to socket and see if the DB is ready
 	const maxAttempts = 40
 	const attemptSleep = 10 * time.Millisecond
-	for i := 0; i < maxAttempts; i++ {
+	for range maxAttempts {
 		// Connect to the socket
 		clientConn, err := net.Dial("unix", unixSocketPath)
 		if err != nil {

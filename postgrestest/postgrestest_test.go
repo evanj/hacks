@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
@@ -13,7 +14,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"golang.org/x/exp/slog"
 )
 
 const connectTimeout = 100 * time.Millisecond

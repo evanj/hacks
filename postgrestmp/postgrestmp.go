@@ -9,9 +9,10 @@ import (
 	"strings"
 	"syscall"
 
+	"log/slog"
+
 	"github.com/evanj/hacks/nilslog"
 	"github.com/evanj/hacks/postgrestest"
-	"golang.org/x/exp/slog"
 )
 
 const psqlBinName = "psql"
