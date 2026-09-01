@@ -128,6 +128,11 @@ func NewInstanceWithOptions(options Options) (*Instance, error) {
 
 	options.Logger = nilslog.NewIfNil(options.Logger)
 
+	// check for Mac sandbox
+	if detectMacSandbox() {
+		return nil, errors.New("Mac sandbox detected: Postgres cannot run (needs shmget)")
+	}
+
 	shouldCleanUpDir := true
 	dir, err := os.MkdirTemp("", "postgrestest_")
 	if err != nil {

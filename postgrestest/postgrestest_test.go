@@ -302,5 +302,4 @@ func TestNewInstanceWithOptionsDirPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer instance2.Close()
-
 }
