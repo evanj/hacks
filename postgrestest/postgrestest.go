@@ -128,9 +128,9 @@ func NewInstanceWithOptions(options Options) (*Instance, error) {
 
 	options.Logger = nilslog.NewIfNil(options.Logger)
 
-	// check for Mac sandbox
+	// check for Mac sandbox: causes postgres to allocate a shm segment it can't delete
 	if detectMacSandbox() {
-		return nil, errors.New("Mac sandbox detected: Postgres cannot run (needs shmget)")
+		return nil, errors.New("mac sandbox detected: Postgres cannot run (needs shmget)")
 	}
 
 	shouldCleanUpDir := true

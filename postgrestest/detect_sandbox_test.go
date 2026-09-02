@@ -1,15 +1,12 @@
 package postgrestest
 
 import (
-	"bufio"
-	"bytes"
 	"errors"
 	"fmt"
 	"math/rand/v2"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -36,7 +33,11 @@ const macSandboxExecAndSysV = macSandboxExecOnly + `
 (allow ipc-sysv-shm)
 `
 
+// macSandboxTestEnvVar is used to detect if the test is running as a subprocess
 const macSandboxTestEnvVar = "MAC_SANDBOX_TEST_HELPER"
+
+// macSandboxShmKeyEnvVar passes the SysV shared memory key TestMacSandboxHelper should use
+const macSandboxShmKeyEnvVar = "MAC_SANDBOX_TEST_HELPER_SHM_KEY"
 
 // Simulate the nono sandbox, to make sure we detect it correctly.
 func TestDetectMacSandbox(t *testing.T) {
@@ -59,58 +60,63 @@ func TestDetectMacSandbox(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sandbox-exec failed: %s", err)
 	}
-	if strings.TrimSpace(string(out)) != "test" {
+	outStr := string(out)
+	if strings.TrimSpace(outStr) != "test" {
 		t.Errorf("expected output to be \"test\"; was %q", out)
 	}
 
-	// Collect all shared memory segments before the test so we can clean up others
-	sharedSegmentsBefore, err := listSharedSegments()
+	// the exec only sandbox creates but can't delete the shared memory segment
+	leakedKey, err := randomUnusedShmKey()
 	if err != nil {
-		t.Fatalf("listSharedSegments failed: %s", err)
+		t.Fatalf("randomUnusedShmKey failed: %s", err)
 	}
-
-	// the shmget syscall fails to delete the segment in the deny all sandbox
-	out, err = executeHelperInSandbox(sandboxExecPath, execOnlyProfilePath)
+	outStr, err = createShmInSandbox(sandboxExecPath, execOnlyProfilePath, leakedKey)
 	if err == nil {
 		t.Fatal("expected the exec only sandbox to fail; err is nil")
 	}
-	if !strings.Contains(string(out), "shmctl(IPC_RMID) failed: operation not permitted") {
+	if !strings.Contains(outStr, "shmctl(IPC_RMID) failed: operation not permitted") {
 		t.Fatalf("expected the exec only sandbox to fail to delete the shared memory segment. Output:\n%s",
-			string(out))
+			outStr)
 	}
 
-	n, err := deleteNewSharedSegments(sharedSegmentsBefore)
+	leakedID, exists, err := findShmSegment(leakedKey)
 	if err != nil {
-		t.Fatalf("deleteNewSharedSegments failed: %s", err)
+		t.Fatalf("findShmSegment failed: %s", err)
 	}
-	if n != 1 {
-		t.Fatalf("expected 1 new shared memory segment; got %d", n)
+	if !exists {
+		t.Fatalf("expected shared memory segment with key=%d to have leaked; it does not exist", leakedKey)
+	}
+	if _, err := unix.SysvShmCtl(leakedID, unix.IPC_RMID, nil); err != nil {
+		t.Fatalf("failed to delete leaked shared memory segment id=%d: %s", leakedID, err)
 	}
 
-	// try the raw syscall in the sysv sandbox: it should work
+	// try the raw syscall in the sysv sandbox: it should work, and clean up after itself
 	sysVProfilePath := filepath.Join(t.TempDir(), "exec_and_sysv.sb")
 	if err := os.WriteFile(sysVProfilePath, []byte(macSandboxExecAndSysV), 0o400); err != nil {
 		t.Fatal(err)
 	}
-	out, err = executeHelperInSandbox(sandboxExecPath, sysVProfilePath)
+	cleanKey, err := randomUnusedShmKey()
+	if err != nil {
+		t.Fatalf("randomUnusedShmKey failed: %s", err)
+	}
+	outStr, err = createShmInSandbox(sandboxExecPath, sysVProfilePath, cleanKey)
 	if err != nil {
 		t.Fatalf("expected the sysv sandbox to succeed; err=%#v", err)
 	}
-	if !strings.Contains(string(out), "PASS") {
-		t.Fatalf("expected the sysv sandbox to PASS. Output:\n%s",
-			string(out))
+	if !strings.Contains(outStr, "PASS") {
+		t.Fatalf("expected the sysv sandbox to PASS. Output:\n%s", outStr)
 	}
 
-	n, err = deleteNewSharedSegments(sharedSegmentsBefore)
+	_, exists, err = findShmSegment(cleanKey)
 	if err != nil {
-		t.Fatalf("deleteNewSharedSegments failed: %s", err)
+		t.Fatalf("findShmSegment failed: %s", err)
 	}
-	if n != 0 {
-		t.Fatalf("expected 0 new shared memory segments; got %d", n)
+	if exists {
+		t.Fatalf("expected shared memory segment with key=%d to have been deleted by the helper", cleanKey)
 	}
 
 	// test the sandbox detection in the exec-only sandbox: it should return true (in sandbox)
-	detected, err := executeDetectInSandbox(t, sandboxExecPath, execOnlyProfilePath)
+	detected, err := detectInSandbox(sandboxExecPath, execOnlyProfilePath)
 	if err != nil {
 		t.Fatalf("expected the sysv sandbox to succeed; err=%s", err)
 	}
@@ -118,105 +124,56 @@ func TestDetectMacSandbox(t *testing.T) {
 		t.Fatalf("expected the exec only sandbox to be detected (detected=%t)",
 			detected)
 	}
-	detected, err = executeDetectInSandbox(t, sandboxExecPath, sysVProfilePath)
+	detected, err = detectInSandbox(sandboxExecPath, sysVProfilePath)
 	if err != nil {
 		t.Fatalf("expected the sysv sandbox to succeed; err=%#v", err)
 	}
 	if detected {
 		t.Fatal("expected the sysv sandbox to be detected as not in a sandbox")
 	}
-
-	sharedSegmentsEnd, err := listSharedSegments()
-	if err != nil {
-		t.Fatalf("listSharedSegments failed: %s", err)
-	}
-	if !slices.Equal(sharedSegmentsEnd, sharedSegmentsBefore) {
-		t.Fatalf("deleteNewSharedSegments did not delete the expected shared memory segments\nbefore=%#v\nend=%#v",
-			sharedSegmentsBefore, sharedSegmentsEnd)
-	}
 }
 
-// listSharedSegments runs `ipcs -m` and returns the shared memory segment IDs that exist.
-func listSharedSegments() ([]int, error) {
-	out, err := exec.Command("ipcs", "-m").Output()
+// findShmSegment returns the ID of the SysV shared memory segment for key, and whether it exists.
+func findShmSegment(key int) (int, bool, error) {
+	id, err := unix.SysvShmGet(key, 0, 0)
 	if err != nil {
-		return nil, err
-	}
-
-	var ids []int
-	scanner := bufio.NewScanner(bytes.NewReader(out))
-	for scanner.Scan() {
-		fields := strings.Fields(scanner.Text())
-		// data rows look like: m <id> <key> <mode> <owner> <group>
-		if len(fields) < 2 || fields[0] != "m" {
-			continue
+		if errors.Is(err, syscall.ENOENT) {
+			return -1, false, nil
 		}
-		id, err := strconv.Atoi(fields[1])
-		if err != nil {
-			continue
-		}
-		ids = append(ids, id)
+		return -1, false, err
 	}
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
-	return ids, nil
+	return id, true, nil
 }
 
-// deleteNewSharedSegments deletes the shared memory segments that are not included in exclude.
-// It returns the number of segments deleted.
-func deleteNewSharedSegments(exclude []int) (int, error) {
-	excludeSet := make(map[int]bool, len(exclude))
-	for _, id := range exclude {
-		excludeSet[id] = true
-	}
-
-	ids, err := listSharedSegments()
-	if err != nil {
-		return 0, err
-	}
-
-	deleted := 0
-	for _, id := range ids {
-		if excludeSet[id] {
-			continue
-		}
-		out, err := exec.Command("ipcrm", "-m", strconv.Itoa(id)).CombinedOutput()
-		if err != nil {
-			return deleted, fmt.Errorf("ipcrm -m %d failed: %w: %s", id, err, strings.TrimSpace(string(out)))
-		}
-		deleted++
-	}
-	return deleted, nil
-}
-
-// executeHelperInSandbox executes TestMacSandboxHelper using sandbox-exec and a subprocess.
-// It returns the raw output and error from the subprocess CombinedOutput().
-func executeHelperInSandbox(sandboxExecPath, sandboxProfilePath string) ([]byte, error) {
-	// cmd := exec.Command(os.Args[0], "-test.run=TestMacSandboxHelper")
+// createShmInSandbox executes TestMacSandboxCreateShmHelper using sandbox-exec, to create/delete
+// a SysV shared memory segment with key. It returns the raw output and error from the subprocess's
+// CombinedOutput().
+func createShmInSandbox(sandboxExecPath, sandboxProfilePath string, key int) (string, error) {
 	cmd := exec.Command(sandboxExecPath, "-f", sandboxProfilePath,
-		os.Args[0], "-test.run=TestMacSandboxHelper")
-	// set the environment variable so the helper can detect that it is being run by the test
-	cmd.Env = append(os.Environ(), macSandboxTestEnvVar+"=1")
-	return cmd.CombinedOutput()
+		os.Args[0], "-test.run=TestMacSandboxCreateShmHelper")
+	// pass the
+	cmd.Env = append(os.Environ(), macSandboxShmKeyEnvVar+"="+strconv.Itoa(key))
+	out, err := cmd.CombinedOutput()
+	return string(out), err
 }
 
-// Helper function executed as a subprocess
-func TestMacSandboxHelper(t *testing.T) {
-	if os.Getenv(macSandboxTestEnvVar) != "1" {
-		t.Skip("not running as a sandbox helper: skipping")
+// Executed as a subprocess to create/delete a shared memory segment to test sandbox permissions.
+func TestMacSandboxCreateShmHelper(t *testing.T) {
+	shmKeyStr := os.Getenv(macSandboxShmKeyEnvVar)
+	if shmKeyStr == "" {
+		t.Skipf("not running as a subprocess: %s env var not set", macSandboxShmKeyEnvVar)
 	}
-
-	key, err := randomUnusedShmKey()
+	key, err := strconv.Atoi(shmKeyStr)
 	if err != nil {
-		t.Fatalf("randomUnusedShmKey failed: %s", err)
+		t.Fatalf("invalid %s: %s", macSandboxShmKeyEnvVar, err)
 	}
 
-	// create the shared memory segment (expected to always work)
-	const shmSize = 56 // arbitrary; matches shmtest.c
+	// The Mac OS X sandbox always allows creating new shared memory segments (filed an Apple bug
+	// report since this seems wrong).
+	const shmSize = 56 // value used by Postgres
 	id, err := unix.SysvShmGet(key, shmSize, unix.IPC_CREAT|0o600)
 	if err != nil {
-		t.Fatalf("shmget failed: %s", err)
+		t.Fatalf("shmget(..., IPC_CREAT) failed: %s", err)
 	}
 
 	// delete the shared memory segment (fails when sandboxed)
@@ -226,9 +183,9 @@ func TestMacSandboxHelper(t *testing.T) {
 	}
 }
 
-// executeDetectInSandbox executes TestMacSandboxDetectHelper using sandbox-exec and a subprocess.
+// detectInSandbox executes TestMacSandboxDetectHelper using sandbox-exec.
 // It returns the raw output and error from the subprocess CombinedOutput().
-func executeDetectInSandbox(t *testing.T, sandboxExecPath, sandboxProfilePath string) (bool, error) {
+func detectInSandbox(sandboxExecPath, sandboxProfilePath string) (bool, error) {
 	cmd := exec.Command(sandboxExecPath, "-f", sandboxProfilePath,
 		os.Args[0], "-test.run=TestMacSandboxDetectHelper", "-test.v")
 	cmd.Env = append(os.Environ(), macSandboxTestEnvVar+"=1")
@@ -236,21 +193,22 @@ func executeDetectInSandbox(t *testing.T, sandboxExecPath, sandboxProfilePath st
 	if err != nil {
 		return false, fmt.Errorf("TestMacSandboxDetectHelper failed: %w: %s", err, strings.TrimSpace(string(out)))
 	}
-	if strings.Contains(string(out), "detected=true") {
+	outStr := string(out)
+	if strings.Contains(outStr, "detected=true") {
 		return true, nil
 	}
-	if strings.Contains(string(out), "detected=false") {
+	if strings.Contains(outStr, "detected=false") {
 		return false, nil
 	}
 
-	return false, fmt.Errorf("expected output to contain \"detected=true\" or \"detected=false\"; was %q", string(out))
+	err = fmt.Errorf("expected \"detected=true\" or \"detected=false\"; was %q", outStr)
+	return false, err
 }
 
 func TestMacSandboxDetectHelper(t *testing.T) {
 	if os.Getenv(macSandboxTestEnvVar) != "1" {
-		t.Skip("not running as a sandbox helper: skipping")
+		t.Skipf("not running as a test subprocess (%s env var not set)", macSandboxTestEnvVar)
 	}
-
 	detected := detectMacSandbox()
 	fmt.Printf("detected=%t\n", detected)
 }
@@ -264,15 +222,19 @@ func randomUnusedShmKey() (int, error) {
 		if key == 0 {
 			key = 1
 		}
-
-		_, err := unix.SysvShmGet(key, 0, 0)
-		if err != nil {
-			if errors.Is(err, syscall.ENOENT) {
-				// key is unused: success
-				return key, nil
-			}
-			return -1, fmt.Errorf("shmget failed: %s", err)
+		if key <= 0 {
+			panic(fmt.Sprintf("bug: key is %d must be > 0", key))
 		}
+
+		_, exists, err := findShmSegment(key)
+		if err != nil {
+			return -1, fmt.Errorf("findShmSegment failed: %s", err)
+		}
+		if exists {
+			continue
+		}
+		// key is unused: success
+		return key, nil
 	}
 	return -1, fmt.Errorf("no unused key found after %d attempts", maxAttempts)
 }
