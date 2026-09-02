@@ -40,7 +40,7 @@ func TestNewIfNil(t *testing.T) {
 
 func BenchmarkNew(b *testing.B) {
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		logger := New()
 		if logger == nil {
 			b.Fatalf("logger must not be nil: %p", logger)
@@ -52,7 +52,7 @@ func BenchmarkWith(b *testing.B) {
 	logger := New()
 
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		logger2 := logger.With("key", "value")
 		if logger2 == nil {
 			b.Fatalf("logger2 must not be nil: %p", logger2)
@@ -64,7 +64,7 @@ func BenchmarkGroup(b *testing.B) {
 	logger := New()
 
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		logger2 := logger.WithGroup("group")
 		if logger2 == nil {
 			b.Fatalf("logger2 must not be nil: %p", logger2)
